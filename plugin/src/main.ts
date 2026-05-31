@@ -42,6 +42,7 @@ interface LogNote {
   body: string;
   updatedAt: string;
   tags: string[];
+  projects: string[];
 }
 
 // ─── View ────────────────────────────────────────────────────────────────────
@@ -59,6 +60,12 @@ class LogbookView extends ItemView {
 
   // expanded card
   private expandedPath: string | null = null;
+
+  // project autocomplete pool
+  private allProjects: string[] = [];
+
+  // suppress refresh while the user is editing a project picker
+  private skipRefreshUntil = 0;
 
   constructor(leaf: WorkspaceLeaf, settings: LogbookSettings) {
     super(leaf);
@@ -266,7 +273,9 @@ class LogbookView extends ItemView {
   // ── Data ─────────────────────────────────────────────────────────────────
 
   private async refresh() {
+    if (Date.now() < this.skipRefreshUntil) return;
     const notes = await this.loadNotes();
+    this.allProjects = [...new Set(notes.flatMap((n) => n.projects))].sort();
     this.renderFeed(notes);
   }
 
@@ -293,7 +302,8 @@ class LogbookView extends ItemView {
         type:      fm?.type     ?? "draft",
         body,
         updatedAt: fm?.updatedAt ?? new Date(file.stat.mtime).toISOString(),
-        tags:      Array.isArray(fm?.tags) ? fm.tags : [],
+        tags:      Array.isArray(fm?.tags)     ? fm.tags     : [],
+        projects:  Array.isArray(fm?.projects) ? fm.projects : [],
       });
     }
 
@@ -343,6 +353,11 @@ class LogbookView extends ItemView {
     const top = header.createDiv("logbook-card-top");
     this.renderBadge(top, note.type);
 
+    // Project chips (read-only in collapsed view)
+    for (const p of note.projects) {
+      top.createEl("span", { cls: "logbook-project-chip", text: p });
+    }
+
     // Chevron — rotates when expanded
     const chevron = top.createEl("span", { cls: "logbook-chevron" });
     chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
@@ -380,6 +395,9 @@ class LogbookView extends ItemView {
       bodyEl.createEl("p", { cls: "logbook-no-body", text: "No content yet." });
     }
 
+    // Project picker (editable)
+    this.renderProjectPicker(expandInner, note);
+
     const expandFooter = expandInner.createDiv("logbook-expand-footer");
     if (note.tags.length > 0) {
       const tagsRow = expandFooter.createDiv("logbook-tags");
@@ -398,6 +416,13 @@ class LogbookView extends ItemView {
 
     // ── Toggle logic ──────────────────────────────────────────────────────
     let rendered = false;
+
+    // If the card is being re-rendered while already expanded (e.g. after a
+    // project save), render markdown immediately instead of waiting for a click.
+    if (isExpanded && note.body) {
+      rendered = true;
+      MarkdownRenderer.render(this.app, note.body, bodyEl, note.file.path, this);
+    }
 
     const expand = async () => {
       // Collapse any currently open card
@@ -423,6 +448,117 @@ class LogbookView extends ItemView {
 
     header.addEventListener("click", () => {
       card.hasClass("is-expanded") ? collapse() : expand();
+    });
+  }
+
+  // ── Project picker ────────────────────────────────────────────────────────
+
+  private renderProjectPicker(container: HTMLElement, note: LogNote) {
+    const wrap = container.createDiv("logbook-project-picker");
+    wrap.addEventListener("click", (e) => e.stopPropagation()); // don't collapse card
+
+    const renderChips = (projects: string[]) => {
+      wrap.empty();
+
+      const label = wrap.createEl("span", { cls: "logbook-picker-label", text: "Projects" });
+
+      for (const p of projects) {
+        const chip = wrap.createEl("span", { cls: "logbook-project-chip is-editable" });
+        chip.createEl("span", { text: p });
+        const x = chip.createEl("button", { cls: "logbook-chip-remove", text: "×" });
+        x.addEventListener("click", async () => {
+          const updated = note.projects.filter((v) => v !== p);
+          note.projects = updated;
+          await this.updateNoteProjects(note.file, updated);
+          renderChips(updated);
+        });
+      }
+
+      // ── Add-project input ────────────────────────────────────────────
+      const inputWrap  = wrap.createDiv("logbook-picker-input-wrap");
+      const input      = inputWrap.createEl("input", {
+        cls: "logbook-picker-input",
+        attr: { type: "text", placeholder: "+ project", spellcheck: "false" },
+      });
+      const suggestEl  = inputWrap.createDiv("logbook-picker-suggestions");
+      suggestEl.style.display = "none";
+
+      let filtered: string[] = [];
+      let suggestIdx = 0;
+
+      const renderSuggestions = () => {
+        suggestEl.empty();
+        if (!filtered.length) { suggestEl.style.display = "none"; return; }
+        suggestEl.style.display = "block";
+        filtered.forEach((p, i) => {
+          const item = suggestEl.createDiv("logbook-suggest-item");
+          if (i === suggestIdx) item.addClass("is-selected");
+          item.setText(p);
+          item.addEventListener("mousedown", (e) => { e.preventDefault(); addProject(p); });
+          item.addEventListener("mouseenter", () => { suggestIdx = i; renderSuggestions(); });
+        });
+      };
+
+      const addProject = async (raw: string) => {
+        const name = raw.toLowerCase().trim().replace(/\s+/g, "-");
+        if (!name || note.projects.includes(name)) return;
+        const updated = [...note.projects, name];
+        note.projects = updated;
+        input.value = "";
+        suggestEl.style.display = "none";
+        await this.updateNoteProjects(note.file, updated);
+        renderChips(updated);
+      };
+
+      input.addEventListener("input", () => {
+        const val = input.value.toLowerCase().trim();
+        if (!val) { suggestEl.style.display = "none"; return; }
+        filtered = this.allProjects.filter(
+          (p) => p.includes(val) && !note.projects.includes(p)
+        );
+        suggestIdx = 0;
+        renderSuggestions();
+      });
+
+      input.addEventListener("keydown", async (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault(); e.stopPropagation();
+          const candidate = filtered[suggestIdx];
+          await addProject(candidate ?? input.value);
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          suggestIdx = Math.min(suggestIdx + 1, filtered.length - 1);
+          renderSuggestions();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          suggestIdx = Math.max(suggestIdx - 1, 0);
+          renderSuggestions();
+        } else if (e.key === "Backspace" && !input.value && note.projects.length) {
+          e.stopPropagation();
+          const updated = note.projects.slice(0, -1);
+          note.projects = updated;
+          await this.updateNoteProjects(note.file, updated);
+          renderChips(updated);
+        } else if (e.key === "Escape") {
+          e.stopPropagation();
+          input.value = "";
+          suggestEl.style.display = "none";
+        }
+      });
+
+      input.addEventListener("blur", () => {
+        setTimeout(() => { suggestEl.style.display = "none"; }, 160);
+      });
+    };
+
+    renderChips(note.projects);
+  }
+
+  private async updateNoteProjects(file: TFile, projects: string[]) {
+    // Suppress the vault-change refresh so the picker DOM isn't destroyed
+    this.skipRefreshUntil = Date.now() + 600;
+    await this.app.fileManager.processFrontMatter(file, (fm) => {
+      fm.projects = projects;
     });
   }
 

@@ -221,6 +221,116 @@
   color: var(--text-faint);
 }
 
+/* ── Project chips (read-only in card header) ────────────────────────────── */
+
+.logbook-project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--background-modifier-hover);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Project picker (editable, inside expanded card) ─────────────────────── */
+
+.logbook-project-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 12px 0 4px;
+  padding: 8px 10px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+}
+
+.logbook-picker-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+/* Editable variant of the chip */
+.logbook-project-chip.is-editable {
+  padding-right: 4px;
+  cursor: default;
+}
+
+.logbook-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.logbook-chip-remove:hover {
+  background: var(--background-modifier-border-hover);
+  color: var(--text-normal);
+}
+
+/* Input + suggestion dropdown */
+.logbook-picker-input-wrap {
+  position: relative;
+}
+
+.logbook-picker-input {
+  border: none;
+  background: transparent;
+  color: var(--text-normal);
+  font-size: 12px;
+  outline: none;
+  width: 90px;
+  padding: 0 2px;
+}
+.logbook-picker-input::placeholder { color: var(--text-faint); }
+
+.logbook-picker-suggestions {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  min-width: 140px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border-hover);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  z-index: 200;
+}
+
+.logbook-suggest-item {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.logbook-suggest-item:not(:last-child) {
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.logbook-suggest-item.is-selected {
+  background: var(--background-modifier-hover);
+}
+
 .logbook-expand-footer {
   display: flex;
   align-items: center;
