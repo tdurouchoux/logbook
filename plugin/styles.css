@@ -81,10 +81,9 @@
   gap: 6px;
   margin-bottom: 6px;
 }
+/* Badge stays left; chevron + time are pushed to the right via margin-left:auto on chevron */
 
-/* Push time to the right */
 .logbook-time {
-  margin-left: auto;
   font-size: 11px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
@@ -146,6 +145,109 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* ── Card expand / collapse ─────────────────────────────────────────────── */
+
+.logbook-card-header {
+  cursor: pointer;
+}
+
+/* Chevron sits between badge and time, pushed right */
+.logbook-chevron {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.logbook-chevron svg {
+  transition: transform 0.2s ease;
+}
+.logbook-card.is-expanded .logbook-chevron svg {
+  transform: rotate(180deg);
+}
+
+/* Push time after chevron */
+.logbook-card.is-expanded .logbook-time,
+.logbook-card:not(.is-expanded) .logbook-time {
+  margin-left: 6px;
+}
+.logbook-card-top .logbook-time {
+  margin-left: 6px;
+}
+
+/* Hide preview when card is open */
+.logbook-card.is-expanded .logbook-card-preview-wrap {
+  display: none;
+}
+
+/* Grid-height trick: animates height 0 → auto smoothly */
+.logbook-card-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.22s ease;
+}
+.logbook-card.is-expanded .logbook-card-expand {
+  grid-template-rows: 1fr;
+}
+.logbook-card-expand-inner {
+  overflow: hidden;
+}
+
+.logbook-sep {
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 10px 0 12px;
+}
+
+.logbook-expanded-body {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-normal);
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+/* Tame Obsidian's default markdown margins inside our card */
+.logbook-expanded-body > :first-child { margin-top: 0; }
+.logbook-expanded-body > :last-child  { margin-bottom: 0; }
+.logbook-expanded-body p  { margin: 0.4em 0; }
+.logbook-expanded-body h1,
+.logbook-expanded-body h2,
+.logbook-expanded-body h3 { margin: 0.8em 0 0.3em; }
+
+.logbook-no-body {
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.logbook-expand-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+  gap: 8px;
+}
+.logbook-expand-footer .logbook-tags {
+  margin-top: 0;
+}
+
+.logbook-open-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  cursor: pointer;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: opacity 0.12s;
+}
+.logbook-open-btn:hover { opacity: 0.88; }
 
 /* ── Dock ────────────────────────────────────────────────────────────────── */
 

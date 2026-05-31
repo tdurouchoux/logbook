@@ -1,6 +1,7 @@
 import {
   App,
   ItemView,
+  MarkdownRenderer,
   Plugin,
   PluginSettingTab,
   Setting,
@@ -55,6 +56,9 @@ class LogbookView extends ItemView {
   private dropdownVisible = false;
   private dropdownIdx = 0;
   private filteredCmds: typeof ALL_COMMANDS = [];
+
+  // expanded card
+  private expandedPath: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, settings: LogbookSettings) {
     super(leaf);
@@ -327,37 +331,99 @@ class LogbookView extends ItemView {
 
   private renderCard(note: LogNote) {
     const typeInfo = NOTE_TYPES[note.type] ?? NOTE_TYPES.draft;
+    const isExpanded = note.file.path === this.expandedPath;
+
     const card = this.feedEl.createDiv("logbook-card");
     card.style.setProperty("--card-type-color", typeInfo.color);
+    if (isExpanded) card.addClass("is-expanded");
 
-    card.addEventListener("click", () => {
-      this.app.workspace.openLinkText(note.file.path, "", false);
-    });
+    // ── Collapsed header (always visible) ────────────────────────────────
+    const header = card.createDiv("logbook-card-header");
 
-    // Top row: badge + time
-    const top = card.createDiv("logbook-card-top");
+    const top = header.createDiv("logbook-card-top");
     this.renderBadge(top, note.type);
+
+    // Chevron — rotates when expanded
+    const chevron = top.createEl("span", { cls: "logbook-chevron" });
+    chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"/></svg>`;
+
     top.createEl("span", {
       cls: "logbook-time",
       text: relativeTime(new Date(note.updatedAt)),
     });
 
-    // Title
-    card.createEl("div", { cls: "logbook-title", text: note.title });
+    header.createEl("div", { cls: "logbook-title", text: note.title });
 
-    // Body preview
+    // Preview + tags (hidden when expanded)
+    const previewWrap = header.createDiv("logbook-card-preview-wrap");
     if (note.body) {
       const plain = note.body.replace(/^#{1,4}\s+/gm, "").slice(0, 160);
-      card.createEl("div", { cls: "logbook-preview", text: plain });
+      previewWrap.createEl("div", { cls: "logbook-preview", text: plain });
     }
-
-    // Tags
     if (note.tags.length > 0) {
-      const tagsRow = card.createDiv("logbook-tags");
+      const tagsRow = previewWrap.createDiv("logbook-tags");
       for (const tag of note.tags) {
         tagsRow.createEl("span", { cls: "logbook-tag", text: "#" + tag });
       }
     }
+
+    // ── Expanded section (animated open/close) ────────────────────────────
+    const expandWrap  = card.createDiv("logbook-card-expand");
+    const expandInner = expandWrap.createDiv("logbook-card-expand-inner");
+
+    expandInner.createEl("div", { cls: "logbook-sep" });
+
+    const bodyEl = expandInner.createDiv("logbook-expanded-body");
+    if (!note.body) {
+      bodyEl.createEl("p", { cls: "logbook-no-body", text: "No content yet." });
+    }
+
+    const expandFooter = expandInner.createDiv("logbook-expand-footer");
+    if (note.tags.length > 0) {
+      const tagsRow = expandFooter.createDiv("logbook-tags");
+      for (const tag of note.tags) {
+        tagsRow.createEl("span", { cls: "logbook-tag", text: "#" + tag });
+      }
+    }
+    const openBtn = expandFooter.createEl("button", {
+      cls: "logbook-open-btn",
+      text: "Open note →",
+    });
+    openBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.app.workspace.openLinkText(note.file.path, "", false);
+    });
+
+    // ── Toggle logic ──────────────────────────────────────────────────────
+    let rendered = false;
+
+    const expand = async () => {
+      // Collapse any currently open card
+      this.feedEl.querySelectorAll(".logbook-card.is-expanded").forEach((el) =>
+        el.classList.remove("is-expanded")
+      );
+      this.expandedPath = note.file.path;
+      card.addClass("is-expanded");
+
+      // Lazy-render markdown on first open
+      if (!rendered && note.body) {
+        rendered = true;
+        await MarkdownRenderer.render(
+          this.app, note.body, bodyEl, note.file.path, this
+        );
+      }
+    };
+
+    const collapse = () => {
+      this.expandedPath = null;
+      card.removeClass("is-expanded");
+    };
+
+    header.addEventListener("click", () => {
+      card.hasClass("is-expanded") ? collapse() : expand();
+    });
   }
 
   private renderBadge(parent: HTMLElement, type: string) {
