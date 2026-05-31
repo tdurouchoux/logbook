@@ -353,10 +353,9 @@ class LogbookView extends ItemView {
     const top = header.createDiv("logbook-card-top");
     this.renderBadge(top, note.type);
 
-    // Project chips (read-only in collapsed view)
-    for (const p of note.projects) {
-      top.createEl("span", { cls: "logbook-project-chip", text: p });
-    }
+    // Project row — read-only chips collapsed, editable when expanded
+    const projectRow = top.createDiv("logbook-project-row");
+    this.renderProjectRow(projectRow, note);
 
     // Chevron — rotates when expanded
     const chevron = top.createEl("span", { cls: "logbook-chevron" });
@@ -394,9 +393,6 @@ class LogbookView extends ItemView {
     if (!note.body) {
       bodyEl.createEl("p", { cls: "logbook-no-body", text: "No content yet." });
     }
-
-    // Project picker (editable)
-    this.renderProjectPicker(expandInner, note);
 
     const expandFooter = expandInner.createDiv("logbook-expand-footer");
     if (note.tags.length > 0) {
@@ -451,40 +447,39 @@ class LogbookView extends ItemView {
     });
   }
 
-  // ── Project picker ────────────────────────────────────────────────────────
+  // ── Project row (inline in card-top, editable when expanded) ─────────────
 
-  private renderProjectPicker(container: HTMLElement, note: LogNote) {
-    const wrap = container.createDiv("logbook-project-picker");
-    wrap.addEventListener("click", (e) => e.stopPropagation()); // don't collapse card
+  private renderProjectRow(container: HTMLElement, note: LogNote) {
+    container.addEventListener("click", (e) => e.stopPropagation());
 
-    const renderChips = (projects: string[]) => {
-      wrap.empty();
-
-      const label = wrap.createEl("span", { cls: "logbook-picker-label", text: "Projects" });
+    const render = (projects: string[]) => {
+      container.empty();
 
       for (const p of projects) {
-        const chip = wrap.createEl("span", { cls: "logbook-project-chip is-editable" });
+        const chip = container.createEl("span", { cls: "logbook-project-chip" });
         chip.createEl("span", { text: p });
         const x = chip.createEl("button", { cls: "logbook-chip-remove", text: "×" });
-        x.addEventListener("click", async () => {
-          const updated = note.projects.filter((v) => v !== p);
+        x.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const updated = projects.filter((v) => v !== p);
           note.projects = updated;
           await this.updateNoteProjects(note.file, updated);
-          renderChips(updated);
+          render(updated);
         });
       }
 
-      // ── Add-project input ────────────────────────────────────────────
-      const inputWrap  = wrap.createDiv("logbook-picker-input-wrap");
-      const input      = inputWrap.createEl("input", {
+      // Add-project input (hidden when card is collapsed via CSS)
+      const inputWrap = container.createDiv("logbook-picker-input-wrap");
+      const input = inputWrap.createEl("input", {
         cls: "logbook-picker-input",
         attr: { type: "text", placeholder: "+ project", spellcheck: "false" },
       });
-      const suggestEl  = inputWrap.createDiv("logbook-picker-suggestions");
+      const suggestEl = inputWrap.createDiv("logbook-picker-suggestions");
       suggestEl.style.display = "none";
 
       let filtered: string[] = [];
       let suggestIdx = 0;
+      let pickingFromList = false;  // true while pointer is over a suggestion
 
       const renderSuggestions = () => {
         suggestEl.empty();
@@ -494,20 +489,26 @@ class LogbookView extends ItemView {
           const item = suggestEl.createDiv("logbook-suggest-item");
           if (i === suggestIdx) item.addClass("is-selected");
           item.setText(p);
-          item.addEventListener("mousedown", (e) => { e.preventDefault(); addProject(p); });
+          // mousedown fires before blur — use it to flag we're selecting
+          item.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            pickingFromList = true;
+          });
+          item.addEventListener("click", () => { addProject(p); });
           item.addEventListener("mouseenter", () => { suggestIdx = i; renderSuggestions(); });
         });
       };
 
       const addProject = async (raw: string) => {
         const name = raw.toLowerCase().trim().replace(/\s+/g, "-");
+        pickingFromList = false;
         if (!name || note.projects.includes(name)) return;
         const updated = [...note.projects, name];
         note.projects = updated;
         input.value = "";
         suggestEl.style.display = "none";
         await this.updateNoteProjects(note.file, updated);
-        renderChips(updated);
+        render(updated);
       };
 
       input.addEventListener("input", () => {
@@ -523,8 +524,7 @@ class LogbookView extends ItemView {
       input.addEventListener("keydown", async (e) => {
         if (e.key === "Enter") {
           e.preventDefault(); e.stopPropagation();
-          const candidate = filtered[suggestIdx];
-          await addProject(candidate ?? input.value);
+          await addProject(filtered[suggestIdx] ?? input.value);
         } else if (e.key === "ArrowDown") {
           e.preventDefault();
           suggestIdx = Math.min(suggestIdx + 1, filtered.length - 1);
@@ -538,7 +538,7 @@ class LogbookView extends ItemView {
           const updated = note.projects.slice(0, -1);
           note.projects = updated;
           await this.updateNoteProjects(note.file, updated);
-          renderChips(updated);
+          render(updated);
         } else if (e.key === "Escape") {
           e.stopPropagation();
           input.value = "";
@@ -547,11 +547,12 @@ class LogbookView extends ItemView {
       });
 
       input.addEventListener("blur", () => {
-        setTimeout(() => { suggestEl.style.display = "none"; }, 160);
+        // Don't hide if the user is clicking a suggestion
+        if (!pickingFromList) suggestEl.style.display = "none";
       });
     };
 
-    renderChips(note.projects);
+    render(note.projects);
   }
 
   private async updateNoteProjects(file: TFile, projects: string[]) {

@@ -81,7 +81,7 @@
   gap: 6px;
   margin-bottom: 6px;
 }
-/* Badge stays left; chevron + time are pushed to the right via margin-left:auto on chevron */
+/* Badge left, project-row takes flex:1 middle, chevron + time right */
 
 .logbook-time {
   font-size: 11px;
@@ -152,9 +152,9 @@
   cursor: pointer;
 }
 
-/* Chevron sits between badge and time, pushed right */
+/* Chevron sits right of project-row, no auto margin needed */
 .logbook-chevron {
-  margin-left: auto;
+  margin-left: 0;
   display: flex;
   align-items: center;
   color: var(--text-faint);
@@ -221,7 +221,17 @@
   color: var(--text-faint);
 }
 
-/* ── Project chips (read-only in card header) ────────────────────────────── */
+/* ── Project row (inline in card-top) ────────────────────────────────────── */
+
+/* Flex spacer between badge and chevron */
+.logbook-project-row {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
 
 .logbook-project-chip {
   display: inline-flex;
@@ -233,48 +243,19 @@
   background: var(--background-modifier-hover);
   border: 1px solid var(--background-modifier-border);
   border-radius: 5px;
-  padding: 1px 6px;
+  padding: 1px 6px 1px 7px;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-/* ── Project picker (editable, inside expanded card) ─────────────────────── */
-
-.logbook-project-picker {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  margin: 12px 0 4px;
-  padding: 8px 10px;
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-}
-
-.logbook-picker-label {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  flex-shrink: 0;
-  margin-right: 2px;
-}
-
-/* Editable variant of the chip */
-.logbook-project-chip.is-editable {
-  padding-right: 4px;
-  cursor: default;
-}
-
+/* × button — hidden when card is collapsed */
 .logbook-chip-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-  margin-left: 2px;
+  width: 13px;
+  height: 13px;
+  margin-left: 1px;
   padding: 0;
   border: none;
   border-radius: 50%;
@@ -289,8 +270,19 @@
   background: var(--background-modifier-border-hover);
   color: var(--text-normal);
 }
+.logbook-card:not(.is-expanded) .logbook-chip-remove {
+  display: none;
+}
+/* Tighten chip padding when × is hidden */
+.logbook-card:not(.is-expanded) .logbook-project-chip {
+  padding-right: 7px;
+}
 
-/* Input + suggestion dropdown */
+/* Add-project input — hidden when card is collapsed */
+.logbook-card:not(.is-expanded) .logbook-picker-input-wrap {
+  display: none;
+}
+
 .logbook-picker-input-wrap {
   position: relative;
 }
@@ -299,18 +291,19 @@
   border: none;
   background: transparent;
   color: var(--text-normal);
-  font-size: 12px;
+  font-size: 11.5px;
   outline: none;
-  width: 90px;
-  padding: 0 2px;
+  width: 80px;
+  padding: 1px 2px;
 }
 .logbook-picker-input::placeholder { color: var(--text-faint); }
 
+/* Suggestions drop DOWN (we're in the header, not the footer) */
 .logbook-picker-suggestions {
   position: absolute;
-  bottom: calc(100% + 4px);
+  top: calc(100% + 4px);
   left: 0;
-  min-width: 140px;
+  min-width: 150px;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border-hover);
   border-radius: 8px;
