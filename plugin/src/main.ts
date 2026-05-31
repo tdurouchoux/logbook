@@ -11,22 +11,28 @@ import {
 
 const VIEW_TYPE_LOGBOOK = "logbook-feed";
 
-const NOTE_TYPES: Record<string, { label: string; color: string }> = {
-  draft:     { label: "Draft",     color: "#807966" },
-  task:      { label: "Task",      color: "#c89844" },
-  meeting:   { label: "Meeting",   color: "#5b8db8" },
-  thoughts:  { label: "Thoughts",  color: "#8a5cb2" },
-  knowledge: { label: "Knowledge", color: "#7a9956" },
-  design:    { label: "Design",    color: "#9b6db5" },
+interface NoteTypeConfig {
+  label: string;
+  color: string;
+  desc: string;
+}
+
+const NOTE_TYPES: Record<string, NoteTypeConfig> = {
+  draft:     { label: "Draft",     color: "#807966", desc: "Quick unstructured capture" },
+  task:      { label: "Task",      color: "#c89844", desc: "An action with a state" },
+  meeting:   { label: "Meeting",   color: "#5b8db8", desc: "Notes from a conversation" },
+  thoughts:  { label: "Thoughts",  color: "#8a5cb2", desc: "Exploration of an idea" },
+  knowledge: { label: "Knowledge", color: "#7a9956", desc: "Something worth remembering" },
+  design:    { label: "Design",    color: "#9b6db5", desc: "Technical design note" },
 };
+
+const ALL_COMMANDS = Object.entries(NOTE_TYPES).map(([key, cfg]) => ({ key, ...cfg }));
 
 interface LogbookSettings {
   folder: string;
 }
 
-const DEFAULT_SETTINGS: LogbookSettings = {
-  folder: "logbook",
-};
+const DEFAULT_SETTINGS: LogbookSettings = { folder: "logbook" };
 
 interface LogNote {
   file: TFile;
@@ -43,56 +49,217 @@ class LogbookView extends ItemView {
   private settings: LogbookSettings;
   private feedEl!: HTMLElement;
   private inputEl!: HTMLInputElement;
-  private typeSelectEl!: HTMLSelectElement;
+  private dropdownEl!: HTMLElement;
+
+  // command-bar state
+  private dropdownVisible = false;
+  private dropdownIdx = 0;
+  private filteredCmds: typeof ALL_COMMANDS = [];
 
   constructor(leaf: WorkspaceLeaf, settings: LogbookSettings) {
     super(leaf);
     this.settings = settings;
   }
 
-  getViewType(): string  { return VIEW_TYPE_LOGBOOK; }
+  getViewType(): string    { return VIEW_TYPE_LOGBOOK; }
   getDisplayText(): string { return "Logbook"; }
-  getIcon(): string { return "book-open"; }
+  getIcon(): string        { return "book-open"; }
 
   async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("logbook-view");
 
+    // ── Feed ──────────────────────────────────────────────────────────────
     this.feedEl = contentEl.createDiv("logbook-feed");
 
+    // ── Dock ──────────────────────────────────────────────────────────────
     const dock = contentEl.createDiv("logbook-dock");
 
-    this.typeSelectEl = dock.createEl("select", { cls: "logbook-type-select" });
-    for (const [key, { label }] of Object.entries(NOTE_TYPES)) {
-      this.typeSelectEl.createEl("option", { value: key, text: label });
-    }
+    // Dropdown (rises above the input)
+    this.dropdownEl = dock.createDiv("logbook-cmd-dropdown");
+    this.dropdownEl.style.display = "none";
 
+    // Input
     this.inputEl = dock.createEl("input", {
       cls: "logbook-input",
-      attr: { placeholder: "Write a note… press Enter to save", type: "text" },
+      attr: {
+        type: "text",
+        placeholder: "Write a note, or type / for a type…",
+        spellcheck: "false",
+      },
     });
 
-    this.inputEl.addEventListener("keydown", async (e) => {
-      if (e.key === "Enter" && this.inputEl.value.trim()) {
-        await this.createNote(this.inputEl.value.trim(), this.typeSelectEl.value);
-        this.inputEl.value = "";
-      }
+    this.inputEl.addEventListener("input", () => this.onInput());
+    this.inputEl.addEventListener("keydown", (e) => this.onKeydown(e));
+
+    // Close dropdown on outside click
+    document.addEventListener("click", (e) => {
+      if (!dock.contains(e.target as Node)) this.closeDropdown();
     });
 
+    // Vault reactivity
     this.registerEvent(this.app.vault.on("create",  () => this.refresh()));
     this.registerEvent(this.app.vault.on("modify",  () => this.refresh()));
     this.registerEvent(this.app.vault.on("delete",  () => this.refresh()));
     this.registerEvent(this.app.metadataCache.on("changed", () => this.refresh()));
 
     await this.refresh();
-    // Scroll to bottom after first render
     setTimeout(() => { this.feedEl.scrollTop = this.feedEl.scrollHeight; }, 80);
   }
 
   async onClose() {}
 
-  // ── Data ──────────────────────────────────────────────────────────────────
+  // ── Command bar ───────────────────────────────────────────────────────────
+
+  private onInput() {
+    const val = this.inputEl.value;
+
+    if (val.startsWith("/")) {
+      const rest = val.slice(1);
+      const spaceIdx = rest.indexOf(" ");
+
+      if (spaceIdx === -1) {
+        // Still picking a command — show filtered dropdown
+        this.filteredCmds = ALL_COMMANDS.filter((c) =>
+          c.key.startsWith(rest.toLowerCase())
+        );
+        this.dropdownIdx = Math.min(this.dropdownIdx, Math.max(0, this.filteredCmds.length - 1));
+        this.showDropdown();
+        this.inputEl.addClass("is-command");
+      } else {
+        // Command picked, typing the title now
+        this.closeDropdown();
+        this.inputEl.addClass("is-command");
+        const cmdKey = rest.slice(0, spaceIdx).toLowerCase();
+        const typeInfo = NOTE_TYPES[cmdKey];
+        this.inputEl.placeholder = typeInfo
+          ? `${typeInfo.label} title…`
+          : "Note title…";
+      }
+    } else {
+      this.closeDropdown();
+      this.inputEl.removeClass("is-command");
+      this.inputEl.placeholder = "Write a note, or type / for a type…";
+    }
+  }
+
+  private onKeydown(e: KeyboardEvent) {
+    if (this.dropdownVisible) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        this.dropdownIdx = (this.dropdownIdx + 1) % this.filteredCmds.length;
+        this.renderDropdown();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        this.dropdownIdx =
+          (this.dropdownIdx - 1 + this.filteredCmds.length) % this.filteredCmds.length;
+        this.renderDropdown();
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        if (this.filteredCmds[this.dropdownIdx]) {
+          this.pickCommand(this.filteredCmds[this.dropdownIdx].key);
+        }
+      } else if (e.key === "Escape") {
+        this.inputEl.value = "";
+        this.closeDropdown();
+        this.inputEl.removeClass("is-command");
+        this.inputEl.placeholder = "Write a note, or type / for a type…";
+      }
+      return;
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      this.handleEnter();
+    } else if (e.key === "Escape") {
+      this.inputEl.value = "";
+      this.inputEl.removeClass("is-command");
+      this.inputEl.placeholder = "Write a note, or type / for a type…";
+    }
+  }
+
+  private handleEnter() {
+    const val = this.inputEl.value.trim();
+    if (!val) return;
+
+    if (val.startsWith("/")) {
+      const rest = val.slice(1);
+      const spaceIdx = rest.indexOf(" ");
+      if (spaceIdx >= 0) {
+        const cmdKey = rest.slice(0, spaceIdx).toLowerCase();
+        const title  = rest.slice(spaceIdx + 1).trim();
+        if (title && NOTE_TYPES[cmdKey]) {
+          this.createNote(title, cmdKey);
+          this.resetInput();
+        }
+      }
+      // If no space yet, prompt user to keep typing
+    } else {
+      // Plain text → draft
+      this.createNote(val, "draft");
+      this.resetInput();
+    }
+  }
+
+  private pickCommand(key: string) {
+    this.inputEl.value = `/${key} `;
+    this.closeDropdown();
+    this.inputEl.focus();
+    this.onInput(); // refresh placeholder
+  }
+
+  private showDropdown() {
+    this.dropdownEl.style.display = "block";
+    this.dropdownVisible = true;
+    this.renderDropdown();
+  }
+
+  private closeDropdown() {
+    this.dropdownEl.style.display = "none";
+    this.dropdownVisible = false;
+    this.dropdownIdx = 0;
+  }
+
+  private renderDropdown() {
+    this.dropdownEl.empty();
+
+    if (this.filteredCmds.length === 0) {
+      this.dropdownEl.createEl("div", {
+        cls: "logbook-cmd-empty",
+        text: "No matching type",
+      });
+      return;
+    }
+
+    this.filteredCmds.forEach((cmd, i) => {
+      const item = this.dropdownEl.createDiv("logbook-cmd-item");
+      if (i === this.dropdownIdx) item.addClass("is-selected");
+
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // keep focus on input
+        this.pickCommand(cmd.key);
+      });
+      item.addEventListener("mouseenter", () => {
+        this.dropdownIdx = i;
+        this.renderDropdown();
+      });
+
+      const left = item.createDiv("logbook-cmd-item-left");
+      this.renderBadge(left, cmd.key);
+      left.createEl("span", { cls: "logbook-cmd-desc", text: cmd.desc });
+
+      item.createEl("kbd", { cls: "logbook-cmd-key", text: `/${cmd.key}` });
+    });
+  }
+
+  private resetInput() {
+    this.inputEl.value = "";
+    this.inputEl.removeClass("is-command");
+    this.inputEl.placeholder = "Write a note, or type / for a type…";
+  }
+
+  // ── Data ─────────────────────────────────────────────────────────────────
 
   private async refresh() {
     const notes = await this.loadNotes();
@@ -101,16 +268,15 @@ class LogbookView extends ItemView {
 
   private async loadNotes(): Promise<LogNote[]> {
     const prefix = this.settings.folder + "/";
-    const files = this.app.vault.getMarkdownFiles().filter(
-      (f) => f.path.startsWith(prefix)
-    );
+    const files = this.app.vault
+      .getMarkdownFiles()
+      .filter((f) => f.path.startsWith(prefix));
 
     const notes: LogNote[] = [];
     for (const file of files) {
-      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      const fm      = this.app.metadataCache.getFileCache(file)?.frontmatter;
       const content = await this.app.vault.cachedRead(file);
 
-      // Strip YAML front matter to get body
       let body = content;
       if (content.startsWith("---")) {
         const end = content.indexOf("\n---\n", 3);
@@ -119,15 +285,14 @@ class LogbookView extends ItemView {
 
       notes.push({
         file,
-        title: fm?.title ?? file.basename,
-        type:  fm?.type  ?? "draft",
+        title:     fm?.title    ?? file.basename,
+        type:      fm?.type     ?? "draft",
         body,
         updatedAt: fm?.updatedAt ?? new Date(file.stat.mtime).toISOString(),
-        tags: Array.isArray(fm?.tags) ? fm.tags : [],
+        tags:      Array.isArray(fm?.tags) ? fm.tags : [],
       });
     }
 
-    // Oldest first → newest at the bottom
     return notes.sort(
       (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
     );
@@ -136,7 +301,6 @@ class LogbookView extends ItemView {
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   private renderFeed(notes: LogNote[]) {
-    // Remember if the user was already at the bottom
     const atBottom =
       this.feedEl.scrollHeight - this.feedEl.scrollTop <=
       this.feedEl.clientHeight + 80;
@@ -145,7 +309,8 @@ class LogbookView extends ItemView {
 
     if (notes.length === 0) {
       const empty = this.feedEl.createDiv("logbook-empty");
-      empty.setText("No notes yet — start writing below.");
+      empty.createEl("p", { text: "Nothing here yet." });
+      empty.createEl("p", { cls: "logbook-empty-hint", text: "Type / to pick a note type, or just write to capture a draft." });
       return;
     }
 
@@ -161,19 +326,17 @@ class LogbookView extends ItemView {
   }
 
   private renderCard(note: LogNote) {
+    const typeInfo = NOTE_TYPES[note.type] ?? NOTE_TYPES.draft;
     const card = this.feedEl.createDiv("logbook-card");
+    card.style.setProperty("--card-type-color", typeInfo.color);
+
     card.addEventListener("click", () => {
       this.app.workspace.openLinkText(note.file.path, "", false);
     });
 
     // Top row: badge + time
     const top = card.createDiv("logbook-card-top");
-    const typeInfo = NOTE_TYPES[note.type] ?? NOTE_TYPES.draft;
-    const badge = top.createEl("span", {
-      cls: "logbook-badge",
-      text: typeInfo.label.toUpperCase(),
-    });
-    badge.style.setProperty("--badge-color", typeInfo.color);
+    this.renderBadge(top, note.type);
     top.createEl("span", {
       cls: "logbook-time",
       text: relativeTime(new Date(note.updatedAt)),
@@ -182,9 +345,9 @@ class LogbookView extends ItemView {
     // Title
     card.createEl("div", { cls: "logbook-title", text: note.title });
 
-    // Body preview (strip markdown syntax noise)
+    // Body preview
     if (note.body) {
-      const plain = note.body.replace(/^#{1,4}\s+/gm, "").slice(0, 140);
+      const plain = note.body.replace(/^#{1,4}\s+/gm, "").slice(0, 160);
       card.createEl("div", { cls: "logbook-preview", text: plain });
     }
 
@@ -195,6 +358,16 @@ class LogbookView extends ItemView {
         tagsRow.createEl("span", { cls: "logbook-tag", text: "#" + tag });
       }
     }
+  }
+
+  private renderBadge(parent: HTMLElement, type: string) {
+    const typeInfo = NOTE_TYPES[type] ?? NOTE_TYPES.draft;
+    const badge = parent.createEl("span", { cls: "logbook-badge" });
+    badge.style.setProperty("--badge-color", typeInfo.color);
+    const dot = badge.createEl("span", { cls: "logbook-badge-dot" });
+    dot.style.background = typeInfo.color;
+    badge.createSpan({ text: typeInfo.label.toUpperCase() });
+    return badge;
   }
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -217,42 +390,27 @@ class LogbookView extends ItemView {
     }
 
     const now = new Date().toISOString();
-    const content =
-`---
-type: ${type}
-title: "${title}"
-tags: []
-projects: []
-teams: []
-createdAt: ${now}
-updatedAt: ${now}
-pinned: false
----
-
-`;
-    await this.app.vault.create(path, content);
+    await this.app.vault.create(
+      path,
+      `---\ntype: ${type}\ntitle: "${title}"\ntags: []\nprojects: []\nteams: []\ncreatedAt: ${now}\nupdatedAt: ${now}\npinned: false\n---\n\n`
+    );
   }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function groupByDay(notes: LogNote[]): [string, LogNote[]][] {
-  const map = new Map<string, LogNote[]>();
-  const today = new Date();
+  const map       = new Map<string, LogNote[]>();
+  const today     = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
   for (const note of notes) {
     const d = new Date(note.updatedAt);
     let label: string;
-    if (sameDay(d, today)) label = "Today";
+    if (sameDay(d, today))     label = "Today";
     else if (sameDay(d, yesterday)) label = "Yesterday";
-    else
-      label = d.toLocaleDateString("en", {
-        weekday: "long",
-        month: "short",
-        day: "numeric",
-      });
+    else label = d.toLocaleDateString("en", { weekday: "long", month: "short", day: "numeric" });
 
     if (!map.has(label)) map.set(label, []);
     map.get(label)!.push(note);
@@ -264,22 +422,22 @@ function groupByDay(notes: LogNote[]): [string, LogNote[]][] {
 function sameDay(a: Date, b: Date) {
   return (
     a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    a.getMonth()    === b.getMonth()    &&
+    a.getDate()     === b.getDate()
   );
 }
 
 function relativeTime(date: Date): string {
-  const diff = Date.now() - date.getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "now";
+  const diff  = Date.now() - date.getTime();
+  const mins  = Math.floor(diff / 60_000);
+  if (mins < 1)  return "now";
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h`;
   return date.toLocaleDateString("en", { day: "numeric", month: "short" });
 }
 
-// ─── Settings tab ─────────────────────────────────────────────────────────────
+// ─── Settings ─────────────────────────────────────────────────────────────────
 
 class LogbookSettingTab extends PluginSettingTab {
   plugin: LogbookPlugin;
@@ -292,7 +450,6 @@ class LogbookSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Logbook" });
-
     new Setting(containerEl)
       .setName("Logbook folder")
       .setDesc("Vault folder where logbook notes are stored.")
@@ -312,20 +469,9 @@ export default class LogbookPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
-
-    this.registerView(
-      VIEW_TYPE_LOGBOOK,
-      (leaf) => new LogbookView(leaf, this.settings)
-    );
-
+    this.registerView(VIEW_TYPE_LOGBOOK, (leaf) => new LogbookView(leaf, this.settings));
     this.addRibbonIcon("book-open", "Open Logbook", () => this.activateView());
-
-    this.addCommand({
-      id: "open-logbook",
-      name: "Open Logbook",
-      callback: () => this.activateView(),
-    });
-
+    this.addCommand({ id: "open-logbook", name: "Open Logbook", callback: () => this.activateView() });
     this.addSettingTab(new LogbookSettingTab(this.app, this));
   }
 
