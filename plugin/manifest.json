@@ -1,0 +1,10 @@
+{
+  "id": "logbook",
+  "name": "Logbook",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "A chat-style feed of typed notes. Capture first, organise never.",
+  "author": "Thibault",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}
