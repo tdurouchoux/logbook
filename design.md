@@ -34,6 +34,8 @@ The trade-off: the UI lives inside Obsidian's constraints (a tab/pane, not a cle
 
 Every note is a `.md` file in the logbook folder. The filename is a normalized slug of the title — UNIX-safe, spaces replaced with underscores, special characters stripped — e.g. `my_note.md`. If the resulting filename already exists, a `_<number>` suffix is appended.
 
+Renaming the file when the title is edited inline (see §4) must go through `app.fileManager.renameFile()`, not `Vault.rename()` — only `fileManager.renameFile()` updates other notes' `[[wikilinks]]` to the renamed file.
+
 ### Common frontmatter fields
 
 ```yaml
@@ -79,7 +81,7 @@ updatedAt: <ISO>
 
 ## 3. The feed
 
-The plugin registers a full-width `ItemView` tab. Obsidian gives every pane its own title bar for free — that's where the view's collapse-mode action lives (see §10) — so the view's own layout is just a flex column:
+The plugin registers an `ItemView` tab in the main workspace area. Its width is whatever the pane gets in the user's current split — full-width only if it's the sole open pane, narrower if split alongside others. Obsidian gives every pane its own title bar for free — that's where the view's collapse-mode action lives (see §10) — so the view's own layout is just a flex column:
 
 ```
 ┌──────────────────────────────────────────┐
@@ -133,11 +135,11 @@ Body preview — 2 lines, plain text…
 First click expands the card in place:
 
 - Preview hides; chevron rotates.
-- Full body renders via Obsidian's `MarkdownRenderer` (lazy — rendered only on first expand), **read-only**. The body is never edited inline — see "Opening in Obsidian's editor" below.
+- Full body renders via Obsidian's `MarkdownRenderer.render()` (the non-deprecated form — `renderMarkdown()` is deprecated), lazily on first expand, **read-only**. The body is never edited inline — see "Opening in Obsidian's editor" below. Each rendered card owns a `Component` whose `load()`/`unload()` the view manages explicitly; skipping this leaks event listeners (e.g. hover-preview on internal links) as cards expand/collapse and scroll in and out of the lazy-loaded window.
 - Title becomes an editable input.
 - Project/team/tag pickers become editable inline: chips with ×, free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
 - Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`.
-- A **"New task from this note"** button: creates a new inline task note pre-filled with the source note's projects/teams/tags, a body line `→ from [[<source note>]]`, and `sourceNoteId` set to the source's `id`.
+- A **"New task from this note"** button: creates a new inline task note pre-filled with the source note's projects/teams/tags, a body line linking back to the source (generated via `app.fileManager.generateMarkdownLink()` so it respects the user's link-format settings, rather than a hardcoded `[[Title]]`), and `sourceNoteId` set to the source's `id`.
 - Footer: hint text (`⌘↵ save / esc collapse`), tags row, and an **"Open note →"** button.
 - `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` — there's no body write path from the expanded card at all.
 - `updatedAt` is only bumped if content actually changed.
