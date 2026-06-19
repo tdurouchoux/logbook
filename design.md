@@ -240,7 +240,7 @@ A single input at the bottom of the view, with two modes.
 
 Typing a leading `/` into the (always-visible) command bar switches it into command mode: monospace font, accent color, dropdown rises above with arrow-key navigation.
 
-**Creation commands** — open a new note inline at the bottom of the feed, pre-filled with the rest of the typed text. The feed scrolls to reveal it, with a date divider reading "Writing a [type]" above it:
+**Creation commands** — create a new note and add it to the bottom of the feed, expanded. The rest of the typed text becomes the note's `title` (or, for `/thoughts`, its `question` field) — never body content, since the body is never authored inline (see §4). The feed scrolls to reveal the new note, with a date divider reading "Writing a [type]" above it:
 
 | Command | Effect |
 |---|---|
