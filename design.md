@@ -106,7 +106,7 @@ The plugin registers a full-width `ItemView` tab. Obsidian gives every pane its 
 
 ### Empty states
 
-- **No notes match the active filter(s):** a quiet message describing the filter, with a hint to press `/` to create a matching note or to clear filters.
+- **No notes match the active filter(s):** a quiet message describing the filter, with a hint to type `/` in the command bar to create a matching note or to clear filters.
 - **No notes exist at all:** a friendly invitation to start writing.
 
 ---
@@ -133,21 +133,20 @@ Body preview — 2 lines, plain text…
 First click expands the card in place:
 
 - Preview hides; chevron rotates.
-- Full body renders via Obsidian's `MarkdownRenderer` (lazy — rendered only on first expand).
+- Full body renders via Obsidian's `MarkdownRenderer` (lazy — rendered only on first expand), **read-only**. The body is never edited inline — see "Opening in Obsidian's editor" below.
 - Title becomes an editable input.
 - Project/team/tag pickers become editable inline: chips with ×, free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
-- Body toggles between rendered preview and a raw `textarea` (click the body, or a pencil/eye toggle) for direct markdown editing.
-- Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`/occurrence tabs.
+- Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`.
 - A **"New task from this note"** button: creates a new inline task note pre-filled with the source note's projects/teams/tags, a body line `→ from [[<source note>]]`, and `sourceNoteId` set to the source's `id`.
 - Footer: hint text (`⌘↵ save / esc collapse`), tags row, and an **"Open note →"** button.
-- `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` for metadata and a debounced file write for the body.
+- `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` — there's no body write path from the expanded card at all.
 - `updatedAt` is only bumped if content actually changed.
 
 Second click on the card (outside an input) collapses it. Expanding a different card collapses whichever was open.
 
 ### Opening in Obsidian's editor
 
-The **"Open note →"** button opens the underlying `.md` file in Obsidian's native editor (a new tab or pane, per the user's normal Obsidian behavior — `Cmd`/`Ctrl`-click for a new pane). This is the plugin's equivalent of a distraction-free "focus mode": full markdown editing, Obsidian's own autosave, and standard pane-splitting all come for free instead of being reimplemented.
+Editing the body is never done inline in the feed — only frontmatter fields (title, tags, projects, teams, type-specific fields) are editable on the expanded card. To write or change body content, the **"Open note →"** button opens the underlying `.md` file in Obsidian's native editor (a new tab or pane, per the user's normal Obsidian behavior — `Cmd`/`Ctrl`-click for a new pane). This sidesteps maintaining a second, separate text buffer for the same file: Obsidian's own editor is the single source of truth for body content, with its own autosave and pane-splitting.
 
 For a recurring meeting, opening the note shows the whole file, including every occurrence heading, in Obsidian's editor.
 
@@ -239,7 +238,7 @@ A single input at the bottom of the view, with two modes.
 
 ### Command mode (`/`)
 
-Typing a leading `/` switches the bar into command mode: monospace font, accent color, dropdown rises above with arrow-key navigation. Pressing `/` from anywhere in the view focuses the bar and opens the dropdown.
+Typing a leading `/` into the (always-visible) command bar switches it into command mode: monospace font, accent color, dropdown rises above with arrow-key navigation.
 
 **Creation commands** — open a new note inline at the bottom of the feed, pre-filled with the rest of the typed text. The feed scrolls to reveal it, with a date divider reading "Writing a [type]" above it:
 
@@ -341,16 +340,17 @@ The plugin has no theme of its own — it uses Obsidian's CSS variables througho
 
 ## 12. Keyboard shortcuts
 
+No shortcut in the plugin is a global, app-wide single-key capture — Obsidian has no per-view equivalent of a web page's "listen from anywhere," and a bare `T`/`?`/`/` grabbed globally would hijack normal typing in any other open note. Every shortcut below only fires while focus is already inside the relevant control (the command bar or an open card):
+
 | Key | Action |
 |---|---|
-| `/` | Open the command bar (from anywhere in the view) |
-| `?` | Open the shortcuts overlay |
-| `T` | Focus the command bar with `/task ` pre-filled |
-| `⌘ ↵` (or `Ctrl ↵`) | Save & collapse the open card |
-| `Esc` | Discard unsaved changes & collapse the open card / clear the command bar |
-| `⌫` | Remove the most recent active filter (when the command bar is empty) |
-| `↑ / ↓` | Navigate the command dropdown |
-| `↵` | Run the selected command, or submit the search query |
+| `⌘ ↵` (or `Ctrl ↵`) | Save & collapse the open card (focus must be inside the card) |
+| `Esc` | Discard unsaved changes & collapse the open card / clear the command bar (focus must be inside it) |
+| `⌫` | Remove the most recent active filter (when the command bar has focus and is empty) |
+| `↑ / ↓` | Navigate the command dropdown (when the dropdown is open) |
+| `↵` | Run the selected command, or submit the search query (when the command bar has focus) |
+
+The command bar itself is always visible at the bottom of the view, so opening it is just a click — no shortcut needed to summon it.
 
 Inside any tag/project/team input:
 
@@ -392,6 +392,7 @@ A consistent rule: dots, hashes, and icons prefix every chip so filter context i
 ## 15. Obsidian-specific implementation notes
 
 - **`processFrontMatter`** is used for all frontmatter edits — Obsidian's official API for updating frontmatter without touching the body, with correct YAML serialization.
+  > ⚠️ **Known risk:** Obsidian's forum has multiple open reports of `processFrontMatter` calls silently dropping or reverting changes when called rapidly/concurrently on the same file (e.g. deletes that leave empty frontmatter, or one call's result getting overwritten by an in-flight one). The status pill (click-to-cycle, saves immediately), the 600ms autosave, and rename-on-title-change can all hit this API back-to-back on the same note. Calls touching the same file need to be serialized (queued one-at-a-time per file path) rather than fired independently — this needs a deliberate write-queue design, not just "call the API and trust it."
 - **Metadata cache** (`app.metadataCache`) is the source of truth for all frontmatter reads — filtering and rendering card metadata never touches disk directly; reads are synchronous and instant.
 - **Refresh suppression** — after a `processFrontMatter` call, vault events fire immediately. The feed suppresses re-renders for 600 ms afterward so an open expanded card isn't torn down mid-edit.
 - **No custom sync** — notes are plain `.md` files in the vault; whatever sync the user already has (iCloud, Obsidian Sync, git) handles them.
