@@ -65,7 +65,7 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     values: note.fm.projects,
     pool: ctx.pools.projects,
     placeholder: "+ project",
-    chipClass: "logbook-project-chip",
+    chipClass: "logbook-pill logbook-project-chip",
     onChange: async (next) => {
       note.fm.projects = next;
       await ctx.store.updateFrontmatter(note.file, (fm) => (fm.projects = next));
@@ -107,7 +107,7 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     const stackRow = previewWrap.createDiv("logbook-stack-row");
     stackRow.createEl("span", { cls: "logbook-stack-label", text: "STACK" });
     for (const tech of note.fm.techStack) {
-      stackRow.createEl("span", { cls: "logbook-stack-chip", text: tech });
+      stackRow.createEl("span", { cls: "logbook-pill logbook-stack-chip", text: tech });
     }
   }
   if (note.body) {
@@ -162,7 +162,7 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     values: note.fm.teams,
     pool: ctx.pools.teams,
     placeholder: "+ team",
-    chipClass: "logbook-team-chip",
+    chipClass: "logbook-pill logbook-team-chip",
     onChange: async (next) => {
       note.fm.teams = next;
       await ctx.store.updateFrontmatter(note.file, (fm) => (fm.teams = next));
@@ -173,7 +173,7 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     values: note.fm.tags,
     pool: ctx.pools.tags,
     placeholder: "+ tag",
-    chipClass: "logbook-tag-chip",
+    chipClass: "logbook-pill logbook-tag-chip",
     prefix: "#",
     onChange: async (next) => {
       note.fm.tags = next;
@@ -251,7 +251,7 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
 
 function renderTagChips(container: HTMLElement, tags: string[], ctx: CardContext) {
   for (const tag of tags) {
-    const chip = container.createEl("span", { cls: "logbook-tag", text: "#" + tag });
+    const chip = container.createEl("span", { cls: "logbook-pill logbook-tag", text: "#" + tag });
     chip.addEventListener("click", (e) => {
       e.stopPropagation();
       ctx.onFilterTag(tag);
@@ -273,7 +273,8 @@ function renderStatusPill(parent: HTMLElement, note: LogNote, ctx: CardContext, 
   if (!isTask(note) && !isDesign(note)) return;
   const cycle = isTask(note) ? TASK_STATUSES : DESIGN_STATUSES;
   const status = isTask(note) ? note.fm.status : (note as any).fm.status;
-  const pill = parent.createEl("span", { cls: `logbook-status-pill is-${status}`, text: status });
+  const pill = parent.createEl("span", { cls: `logbook-pill logbook-status-pill is-${status}`, text: status });
+  if (editable) pill.addClass("is-editable");
   if (!editable) return;
   pill.addEventListener("click", async (e) => {
     e.stopPropagation();
@@ -282,7 +283,7 @@ function renderStatusPill(parent: HTMLElement, note: LogNote, ctx: CardContext, 
     (note.fm as any).status = next;
     await ctx.store.updateFrontmatter(note.file, (fm) => (fm.status = next));
     pill.textContent = next;
-    pill.className = `logbook-status-pill is-${next}`;
+    pill.className = `logbook-pill logbook-status-pill is-editable is-${next}`;
   });
 }
 
@@ -322,7 +323,7 @@ function renderTypeFields(
       values: note.fm.attendees,
       pool: () => [],
       placeholder: "+ attendee",
-      chipClass: "logbook-attendee-chip",
+      chipClass: "logbook-pill logbook-attendee-chip",
       onChange: async (next) => {
         note.fm.attendees = next;
         await ctx.store.updateFrontmatter(note.file, (fm) => (fm.attendees = next));
@@ -366,7 +367,7 @@ function renderTypeFields(
       values: note.fm.techStack,
       pool: () => [],
       placeholder: "+ tech",
-      chipClass: "logbook-stack-chip",
+      chipClass: "logbook-pill logbook-stack-chip",
       onChange: async (next) => {
         note.fm.techStack = next;
         await ctx.store.updateFrontmatter(note.file, (fm) => (fm.techStack = next));

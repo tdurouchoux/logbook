@@ -87,7 +87,7 @@ export class Dock {
   }
 
   private addChip(text: string, onRemove: () => void, italic = false) {
-    const chip = this.chipsEl.createEl("span", { cls: "logbook-filter-chip" });
+    const chip = this.chipsEl.createEl("span", { cls: "logbook-pill logbook-filter-chip" });
     if (italic) chip.addClass("is-italic");
     chip.createSpan({ text });
     const x = chip.createEl("button", { text: "×" });
