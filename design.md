@@ -46,7 +46,6 @@ projects: []              # free-form, lowercase-hyphenated; a note can belong t
 teams: []                 # same shape as projects, but for people/groups
 createdAt: <ISO>
 updatedAt: <ISO>
-pinned: false
 ---
 ```
 
@@ -80,14 +79,13 @@ pinned: false
 
 ## 3. The feed
 
-The plugin registers a full-width `ItemView` tab. Obsidian gives every pane its own title bar for free — that's where the view's two ambient actions live (see §10, §15) — so the view's own layout is just a flex column:
+The plugin registers a full-width `ItemView` tab. Obsidian gives every pane its own title bar for free — that's where the view's two ambient actions live (see §10, §14) — so the view's own layout is just a flex column:
 
 ```
 ┌──────────────────────────────────────────┐
 │  Feed (scrollable, flex:1)                │
 │  Oldest at top, newest at bottom          │
 │  Grouped by day with dividers             │
-│  Pinned section at the very bottom        │
 ├──────────────────────────────────────────┤
 │  Dock (command bar)                       │
 └──────────────────────────────────────────┘
@@ -97,9 +95,8 @@ The plugin registers a full-width `ItemView` tab. Obsidian gives every pane its 
 
 - Chronological, newest at the bottom. The view scrolls to the bottom on open.
 - Sort key is each note's **latest activity timestamp**: `updatedAt` for most notes, but for a recurring meeting it's the date of its most recent occurrence.
-- A newly created note always lands at the bottom of the chronological section — directly above the Pinned section — and the feed scrolls to reveal it.
+- A newly created note always lands at the bottom of the feed, and the view scrolls to reveal it.
 - Day groups: `Today`, `Yesterday`, `Wednesday`, `Wed, May 14`, `May 14, 2024`.
-- **Pinned notes** sit in a separate section below the chronological feed, under a "Pinned" divider.
 
 ### History loading
 
@@ -337,19 +334,13 @@ A chevron action in the pane's title bar (added via `addAction`) toggles collaps
 
 ---
 
-## 11. Pinning
-
-Hovering a collapsed card reveals a pin icon. Pinning sets `pinned: true` via `processFrontMatter`; the note moves to the "Pinned" section at the bottom of the feed and gets a thin accent-colored left border.
-
----
-
-## 12. Theming
+## 11. Theming
 
 The plugin has no theme of its own — it uses Obsidian's CSS variables throughout, so it automatically matches whatever theme (light, dark, or community) the user already has active. The only fixed colors are the per-type badge accents (gray/amber/dusty blue/muted plum/moss green/dusty violet), chosen to read clearly against both light and dark Obsidian themes.
 
 ---
 
-## 13. Keyboard shortcuts
+## 12. Keyboard shortcuts
 
 | Key | Action |
 |---|---|
@@ -372,17 +363,17 @@ Inside any tag/project/team input:
 
 ---
 
-## 14. Anti-features (on purpose)
+## 13. Anti-features (on purpose)
 
 - ~~Folders~~ — notes outside the configured logbook folder are untouched, and inside it there's no sub-foldering.
 - ~~A duplicate file explorer or graph view~~ — the plugin doesn't reimplement what Obsidian's core views already do; it's a typed, filterable feed layered on top.
 - ~~Sharing, comments, collaboration~~ — out of scope.
 - ~~A nested note hierarchy~~ — flat by design.
-- ~~A custom theme~~ — see §12; the plugin defers entirely to the user's installed Obsidian theme.
+- ~~A custom theme~~ — see §11; the plugin defers entirely to the user's installed Obsidian theme.
 
 ---
 
-## 15. Quick visual vocabulary
+## 14. Quick visual vocabulary
 
 - **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), muted plum (thoughts), moss green (knowledge), dusty violet (design).
 - **Status pill** — tasks and design notes only. Read-only on the collapsed card; editable (click to cycle) on the expanded card.
@@ -399,7 +390,7 @@ A consistent rule: dots, hashes, and icons prefix every chip so filter context i
 
 ---
 
-## 16. Obsidian-specific implementation notes
+## 15. Obsidian-specific implementation notes
 
 - **`processFrontMatter`** is used for all frontmatter edits — Obsidian's official API for updating frontmatter without touching the body, with correct YAML serialization.
 - **Metadata cache** (`app.metadataCache`) is the source of truth for all frontmatter reads — filtering and rendering card metadata never touches disk directly; reads are synchronous and instant.
