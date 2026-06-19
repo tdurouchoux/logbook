@@ -2,6 +2,10 @@ import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
 
+const outDir = process.env.VAULT_PATH
+  ? `${process.env.VAULT_PATH}/.obsidian/plugins/logbook`
+  : ".";
+
 const prod = process.argv[2] === "production";
 
 const context = await esbuild.context({
