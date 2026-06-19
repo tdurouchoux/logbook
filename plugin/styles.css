@@ -1,0 +1,519 @@
+/* ── Logbook plugin ──────────────────────────────────────────────────────── */
+
+.logbook-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--background-primary);
+}
+
+/* ── Feed ────────────────────────────────────────────────────────────────── */
+
+.logbook-feed {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 28px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.logbook-empty {
+    margin: auto;
+    text-align: center;
+    color: var(--text-muted);
+}
+.logbook-empty p {
+    margin: 4px 0;
+}
+.logbook-empty-hint {
+    font-size: 12px;
+    color: var(--text-faint);
+}
+
+/* Day dividers */
+.logbook-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-faint);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 12px 0 4px;
+    user-select: none;
+}
+.logbook-divider::before,
+.logbook-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--background-modifier-border);
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+
+.logbook-card {
+    position: relative;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-left: 3px solid
+        var(--card-type-color, var(--background-modifier-border));
+    border-radius: 10px;
+    padding: 11px 16px 10px 14px;
+    cursor: pointer;
+    transition:
+        box-shadow 0.12s ease,
+        border-color 0.12s ease;
+    animation: lb-fadein 0.15s ease;
+}
+.logbook-card:hover {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    border-top-color: var(--background-modifier-border-hover);
+    border-right-color: var(--background-modifier-border-hover);
+    border-bottom-color: var(--background-modifier-border-hover);
+}
+
+@keyframes lb-fadein {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.logbook-card-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+/* Badge left, project-row takes flex:1 middle, chevron + time right */
+
+.logbook-time {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.logbook-title {
+    font-size: 14.5px;
+    font-weight: 500;
+    color: var(--text-normal);
+    margin-bottom: 3px;
+    line-height: 1.4;
+}
+
+.logbook-preview {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.logbook-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 7px;
+}
+.logbook-tag {
+    font-size: 10.5px;
+    color: var(--text-faint);
+    background: var(--background-modifier-hover);
+    border-radius: 999px;
+    padding: 1px 7px;
+}
+
+/* ── Type badge ──────────────────────────────────────────────────────────── */
+
+.logbook-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    padding: 2px 8px 2px 5px;
+    border-radius: 999px;
+    color: var(--badge-color, #807966);
+    background: color-mix(
+        in srgb,
+        var(--badge-color, #807966) 12%,
+        transparent
+    );
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.logbook-badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ── Card expand / collapse ─────────────────────────────────────────────── */
+
+.logbook-card-header {
+    cursor: pointer;
+}
+
+/* Chevron sits right of project-row, no auto margin needed */
+.logbook-chevron {
+    margin-left: 0;
+    display: flex;
+    align-items: center;
+    color: var(--text-faint);
+    flex-shrink: 0;
+}
+.logbook-chevron svg {
+    transition: transform 0.2s ease;
+}
+.logbook-card.is-expanded .logbook-chevron svg {
+    transform: rotate(180deg);
+}
+
+/* Push time after chevron */
+.logbook-card.is-expanded .logbook-time,
+.logbook-card:not(.is-expanded) .logbook-time {
+    margin-left: 6px;
+}
+.logbook-card-top .logbook-time {
+    margin-left: 6px;
+}
+
+/* Hide preview when card is open */
+.logbook-card.is-expanded .logbook-card-preview-wrap {
+    display: none;
+}
+
+/* Grid-height trick: animates height 0 → auto smoothly */
+.logbook-card-expand {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.22s ease;
+}
+.logbook-card.is-expanded .logbook-card-expand {
+    grid-template-rows: 1fr;
+}
+.logbook-card-expand-inner {
+    overflow: hidden;
+}
+
+.logbook-sep {
+    border: none;
+    border-top: 1px solid var(--background-modifier-border);
+    margin: 10px 0 12px;
+}
+
+.logbook-expanded-body {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text-normal);
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+/* Tame Obsidian's default markdown margins inside our card */
+.logbook-expanded-body > :first-child {
+    margin-top: 0;
+}
+.logbook-expanded-body > :last-child {
+    margin-bottom: 0;
+}
+.logbook-expanded-body p {
+    margin: 0.4em 0;
+}
+.logbook-expanded-body h1,
+.logbook-expanded-body h2,
+.logbook-expanded-body h3 {
+    margin: 0.8em 0 0.3em;
+}
+
+.logbook-no-body {
+    font-style: italic;
+    color: var(--text-faint);
+}
+
+/* ── Project row (inline in card-top) ────────────────────────────────────── */
+
+/* Flex spacer between badge and chevron */
+.logbook-project-row {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.logbook-project-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--background-modifier-hover);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    padding: 1px 6px 1px 7px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* × button — hidden when card is collapsed */
+.logbook-chip-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    margin-left: 1px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-faint);
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+        background 0.1s,
+        color 0.1s;
+}
+.logbook-chip-remove:hover {
+    background: var(--background-modifier-border-hover);
+    color: var(--text-normal);
+}
+.logbook-card:not(.is-expanded) .logbook-chip-remove {
+    display: none;
+}
+/* Tighten chip padding when × is hidden */
+.logbook-card:not(.is-expanded) .logbook-project-chip {
+    padding-right: 7px;
+}
+
+/* Add-project input — hidden when card is collapsed */
+.logbook-card:not(.is-expanded) .logbook-picker-input-wrap {
+    display: none;
+}
+
+.logbook-picker-input-wrap {
+    position: relative;
+}
+
+.logbook-picker-input {
+    border: none;
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 11.5px;
+    outline: none;
+    width: 80px;
+    padding: 1px 2px;
+}
+.logbook-picker-input::placeholder {
+    color: var(--text-faint);
+}
+
+/* Suggestions drop DOWN (we're in the header, not the footer) */
+.logbook-picker-suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 150px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border-hover);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    z-index: 200;
+}
+
+.logbook-suggest-item {
+    padding: 6px 10px;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+.logbook-suggest-item:not(:last-child) {
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+.logbook-suggest-item.is-selected {
+    background: var(--background-modifier-hover);
+}
+
+.logbook-expand-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--background-modifier-border);
+    gap: 8px;
+}
+.logbook-expand-footer .logbook-tags {
+    margin-top: 0;
+}
+
+.logbook-open-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--interactive-accent);
+    border: 0.5px solid var(--interactive-accent);
+    border-radius: 8px;
+    padding: 6px 13px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition:
+        background 0.12s,
+        border-color 0.12s,
+        transform 0.1s;
+}
+
+.logbook-open-btn:hover {
+    background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+}
+
+.logbook-open-btn:active {
+    transform: scale(0.97);
+}
+/* ── Dock ────────────────────────────────────────────────────────────────── */
+
+.logbook-dock {
+    position: relative; /* anchor for the dropdown */
+    padding: 10px 16px 14px;
+    border-top: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+}
+
+/* ── Command bar ─────────────────────────────────────────────────────────── */
+
+.logbook-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 10px;
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 0 14px;
+    font-size: 14px;
+    height: 44px;
+    outline: none;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+.logbook-input:focus {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px
+        color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+}
+.logbook-input::placeholder {
+    color: var(--text-faint);
+}
+
+/* Command mode: monospace + accent tint */
+.logbook-input.is-command {
+    font-family: var(--font-monospace);
+    font-size: 13px;
+    color: var(--interactive-accent);
+    border-color: color-mix(
+        in srgb,
+        var(--interactive-accent) 50%,
+        transparent
+    );
+}
+
+/* ── Command dropdown ────────────────────────────────────────────────────── */
+
+.logbook-cmd-dropdown {
+    position: absolute;
+    bottom: calc(100% - 6px); /* sit just above the dock border */
+    left: 16px;
+    right: 16px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border-hover);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+    overflow: hidden;
+    z-index: 100;
+    animation: lb-rise 0.15s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes lb-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.logbook-cmd-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: background 0.08s;
+}
+.logbook-cmd-item:not(:last-child) {
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+.logbook-cmd-item.is-selected {
+    background: var(--background-modifier-hover);
+}
+
+.logbook-cmd-item-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.logbook-cmd-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.logbook-cmd-key {
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    color: var(--text-faint);
+    background: var(--background-modifier-hover);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+}
+.logbook-cmd-item.is-selected .logbook-cmd-key {
+    background: var(--background-secondary);
+}
+
+.logbook-cmd-empty {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+}
