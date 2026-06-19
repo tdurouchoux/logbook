@@ -184,9 +184,9 @@ Common fields: `theme` (filterable), `attendees[]` (first names, shown inline on
 
 #### Recurring
 
-- `subtype: recurring`. Each occurrence is stored as a second-level heading (`## 2025-05-14`, ISO date) inside the single file's body. `occurrences[]` in frontmatter mirrors those dates for fast indexing, but the `##` headings in the body are the canonical structure.
-- Card subtype indicator: `N occurrences`.
-- Expanded card shows a row of date tabs, latest first and labeled "latest"; switching tabs reveals that occurrence's body. A **`+ new`** button adds a new `##` heading dated today and selects it.
+- `subtype: recurring`. Each occurrence is stored as a second-level heading (`## 2025-05-14`, ISO date) inside the single file's body, most recent first. `occurrences[]` in frontmatter mirrors those dates for fast indexing, but the `##` headings in the body are the canonical structure.
+- Card subtype indicator: `N occurrences`, plus the date of the latest one.
+- There is no inline occurrence UI on the card — expanding it shows the read-only body like any other note (see §4). Adding today's occurrence is a command, not a feed interaction: see **`/occurrence`** in §7.
 
 #### Meeting templates
 
@@ -254,6 +254,12 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 | `/thoughts [question]` | New thoughts note, `question` pre-filled |
 | `/knowledge [title]` | New knowledge note |
 | `/design [title]` | New design note |
+
+**`/occurrence [meeting]`** — adds today's occurrence to an *existing* recurring meeting, rather than creating a new note. Autocompletes against the titles of existing recurring meetings (`type: meeting`, `subtype: recurring`), the same fuzzy-matching dropdown used by `/project` and `/team`. On selecting one:
+
+- If a `## <today's ISO date>` heading already exists in that note (checked against its `occurrences[]` frontmatter, no need to open the file), nothing is inserted — the command just opens the note with the cursor on that existing heading. This avoids duplicate headings if the command is run twice in a day.
+- Otherwise, the plugin inserts a new `## <today's ISO date>` heading at the top of the body, above all existing occurrence headings, via `app.vault.process()` — an atomic read-modify-write against the file's current on-disk content, not a cached in-memory copy, so it can't clobber concurrent edits or desync from what's actually on disk. It then prepends today's date to `occurrences[]` via `processFrontMatter` (see §15 for the write-queue note on that API). These are two separate, sequential atomic writes, not one transaction.
+- The note is then opened in Obsidian's native editor (a normal `leaf.openFile`), with the cursor placed on the blank line right under the new heading — ready for the user to type that occurrence's notes directly. This is the only way occurrence content gets added; there is no inline editor for it in the feed (see §4, §5.3).
 
 **Filter commands** — apply a filter to the feed:
 
@@ -382,7 +388,6 @@ Inside any tag/project/team input:
 - **Tag chip** — hashtag-prefixed pill.
 - **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
 - **Date dividers** — uppercase tracked-out label between two hairlines.
-- **Recurring occurrence tabs** — pill row, latest tab outlined in accent and labeled "latest".
 - **Collapse toggle** — a chevron view action in the pane's title bar; toggles title-only view.
 
 A consistent rule: dots, hashes, and icons prefix every chip so filter context is readable without relying on color.
