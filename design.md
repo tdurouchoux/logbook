@@ -8,80 +8,126 @@ A personal note-taking plugin that replaces folder hierarchies with a **chat-sty
 
 The core Logbook idea maps almost perfectly onto Obsidian's architecture:
 
-- Notes are already `.md` files with YAML frontmatter — no custom format needed
-- Obsidian's metadata cache indexes every frontmatter field instantly, making filtering free
-- Sync, backup, and version control are already solved (iCloud, Obsidian Sync, git)
-- `[[wikilinks]]` in note bodies connect Logbook notes to the rest of the vault
-- Other plugins (Dataview, Tasks, Templater) can query your Logbook notes by frontmatter
+- Notes are already `.md` files with YAML frontmatter — no custom format needed.
+- Obsidian's metadata cache indexes every frontmatter field instantly, making filtering free.
+- Sync, backup, and version control are already solved (iCloud, Obsidian Sync, git).
+- `[[wikilinks]]` in note bodies connect Logbook notes to the rest of the vault.
+- Other plugins (Dataview, Tasks, Templater) can query Logbook notes by frontmatter.
+- Obsidian's own `MarkdownRenderer` and theme system cover rendering and visual styling for free.
 
-The trade-off: the UI lives inside Obsidian's constraints rather than a clean browser context. Custom views are capable enough that this is acceptable.
+The trade-off: the UI lives inside Obsidian's constraints (a tab/pane, not a clean browser context) and inherits the user's installed theme rather than shipping its own. Custom views are capable enough that this is acceptable.
 
 ---
 
-## Guiding principles
+## 1. Guiding principles
 
 - **No tree.** The plugin never asks "where does this go?" before letting you write. The feed is the only interface.
 - **Markdown files are canonical.** Every note is a `.md` file with YAML frontmatter. The plugin is a view onto the vault — it holds no state the file can't represent.
-- **Capture first.** Plain text in the bar → draft. Categorisation is optional and lazy.
-- **A note has a type.** Each type has its own structure that the UI surfaces at a glance.
-- **Scoped to one folder.** The plugin watches a configurable folder (default: `logbook/`). Notes outside it are untouched.
+- **The bottom of the view is the active surface.** The command bar (dock) and the most recent note both sit in the user's eye-line at the bottom of the feed.
+- **A note has a type.** Each type has its own structure that the UI surfaces — at a glance in the feed, and as dedicated fields when expanded.
+- **Opinionated defaults.** Sensible structure ships with the type — the user adds detail, never scaffolding.
+- **Scoped to one folder.** The plugin watches a configurable folder (default: `logbook/`). Notes outside it are untouched by the feed, filters, and auto-delete.
 
 ---
 
-## Data model
+## 2. Data model
 
-Every note is a `.md` file in the logbook folder. The filename is a slug derived from the title (`my_note.md`, with `_2` suffix on collision).
+Every note is a `.md` file in the logbook folder. The filename is a normalized slug of the title — UNIX-safe, spaces replaced with underscores, special characters stripped — e.g. `my_note.md`. If the resulting filename already exists, a `_<number>` suffix is appended.
 
 ### Common frontmatter fields
 
 ```yaml
 ---
-type: draft          # one of the six types below
+id: <stable identifier>   # generated on creation, never changes
+type: draft               # one of the six types below
 title: "Note title"
 tags: []
-projects: []         # free-form, lowercase-hyphenated; a note can belong to multiple
-teams: []            # same shape as projects, but for people/groups
+projects: []              # free-form, lowercase-hyphenated; a note can belong to multiple
+teams: []                 # same shape as projects, but for people/groups
 createdAt: <ISO>
 updatedAt: <ISO>
 pinned: false
 ---
 ```
 
-`updatedAt` is only bumped when content actually changes — re-opening and closing a note doesn't reorder the feed.
+`updatedAt` is only bumped when content actually changes — re-opening and closing a note without edits doesn't reorder the feed.
+
+`id` is a stable identifier minted on creation (a short random/UUID string). It's what notes like a task's `sourceNoteId` link back to — filenames and titles can change without breaking that link.
 
 ### The six note types
 
 | Type | Extra fields | Badge color |
 |---|---|---|
 | **Draft** | *(none)* — auto-deleted 7 days after `createdAt` | warm gray |
-| **Task** | `status: todo \| done \| suspended` | amber |
-| **Meeting** | `subtype: standalone \| recurring`, `theme`, `attendees[]` + for recurring: `occurrences[]` | dusty blue |
-| **Thoughts** | `prompt`, `landed` | muted plum |
+| **Task** | `status: todo \| done \| suspended`, optional `sourceNoteId` | amber |
+| **Meeting** | `subtype: standalone \| recurring`, `theme`, `attendees[]` + for recurring: `occurrences[]`; either subtype may carry `template` (filename reference) | dusty blue |
+| **Thoughts** | `question`, `landed` | muted plum |
 | **Knowledge** | `techStack[]` | moss green |
 | **Design** | `status: exploring \| in-review \| decided` | dusty violet |
 
+### Type-level filterable attributes
+
+| Type | Additional filterable attribute |
+|---|---|
+| Task | `status` |
+| Meeting | `theme` |
+| Knowledge | `techStack` |
+| Design | `status` |
+| Thoughts | *(none)* |
+| Draft | *(none)* |
+
 ---
 
-## Feed
+## 3. The feed
 
-The plugin registers a full-width tab view. Layout is a flex column:
+The plugin registers a full-width `ItemView` tab. Layout is a flex column:
 
 ```
-┌──────────────────────────────────┐
-│  Feed (scrollable, flex:1)       │
-│  Oldest at top, newest at bottom │
-│  Grouped by day with dividers    │
-├──────────────────────────────────┤
-│  Dock (command bar)              │
-└──────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│  Header: wordmark · todo count · ⌃ collapse │
+├──────────────────────────────────────────┤
+│  Feed (scrollable, flex:1)                │
+│  Oldest at top, newest at bottom          │
+│  Grouped by day with dividers             │
+│  Pinned section at the very bottom        │
+├──────────────────────────────────────────┤
+│  Dock (command bar)                       │
+└──────────────────────────────────────────┘
 ```
 
-- On open, the feed is scrolled to the bottom.
-- Notes are sorted ascending by `updatedAt` (oldest top, newest bottom).
+### Header
+
+A thin header above the feed shows:
+
+- The plugin wordmark.
+- Active filter chips (mirrors the chips also shown in the dock — see §8).
+- The **todo count indicator**: an ambient badge showing the number of `type: task` notes with `status: todo`, updated live. Clicking it applies a `type: task` + `status: todo` filter.
+- The **collapse-mode toggle** (chevron icon — see §10).
+
+### Order
+
+- Chronological, newest at the bottom. The view scrolls to the bottom on open.
+- Sort key is each note's **latest activity timestamp**: `updatedAt` for most notes, but for a recurring meeting it's the date of its most recent occurrence.
+- A newly created note always lands at the bottom of the chronological section — directly above the Pinned section — and the feed scrolls to reveal it.
 - Day groups: `Today`, `Yesterday`, `Wednesday`, `Wed, May 14`, `May 14, 2024`.
-- **Pinned notes** appear in a separate section at the very bottom of the feed, below the chronological section, under a "Pinned" divider.
+- **Pinned notes** sit in a separate section below the chronological feed, under a "Pinned" divider.
 
-### Note card (collapsed)
+### History loading
+
+- On initial load, notes older than one month are not fetched.
+- A sentinel at the top of the feed triggers loading one more month of notes when scrolled into view, with a subtle loading indicator while it fetches.
+- When a filter is active, the horizon is lifted — search and filters span the whole logbook folder, not just the loaded window.
+
+### Empty states
+
+- **No notes match the active filter(s):** a quiet message describing the filter, with a hint to press `/` to create a matching note or to clear filters.
+- **No notes exist at all:** a friendly invitation to start writing.
+
+---
+
+## 4. Note card
+
+### Collapsed (default)
 
 ```
 [badge] [proj1] [proj2] [+ project]          [▽] [2h]
@@ -91,151 +137,285 @@ Body preview — 2 lines, plain text…
 ```
 
 - Type badge: colored dot + uppercase label.
-- Project chips live inline in the top row. Edit controls (× buttons, input) appear only when expanded.
-- Click anywhere → expand.
+- Status pill (tasks, design notes only): read-only here.
+- Project chips inline in the top row; edit affordances (× buttons, add input) only appear once expanded.
+- `done` tasks render with the title struck through and the card dimmed; `suspended` tasks dimmed further.
+- Clicking anywhere on the card expands it. Clicking a `#tag`, project chip, team chip, or the type badge instead applies that as a filter (see §8) without expanding the card.
 
-### Note card (expanded)
+### Expanded
 
 First click expands the card in place:
-- Preview hides; chevron rotates.
-- Full body renders via Obsidian's `MarkdownRenderer` (lazy — only on first open).
-- Project picker becomes editable inline.
-- Footer: tags + **"Open note →"** button.
 
-Second click collapses. Clicking a different card collapses the current one.
+- Preview hides; chevron rotates.
+- Full body renders via Obsidian's `MarkdownRenderer` (lazy — rendered only on first expand).
+- Title becomes an editable input.
+- Project/team/tag pickers become editable inline: chips with ×, free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
+- Body toggles between rendered preview and a raw `textarea` (click the body, or a pencil/eye toggle) for direct markdown editing.
+- Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`/occurrence tabs.
+- A **"View source"** toggle (`{ }`) shows the canonical `.md` representation — YAML frontmatter plus body — exactly as stored on disk.
+- A **"New task from this note"** button: creates a new inline task note pre-filled with the source note's projects/teams/tags, a body line `→ from [[<source note>]]`, and `sourceNoteId` set to the source's `id`.
+- Footer: hint text (`⌘↵ save / esc collapse`), tags row, and an **"Open note →"** button.
+- `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` for metadata and a debounced file write for the body.
+- `updatedAt` is only bumped if content actually changed.
+
+Second click on the card (outside an input) collapses it. Expanding a different card collapses whichever was open.
+
+### Opening in Obsidian's editor
+
+The **"Open note →"** button opens the underlying `.md` file in Obsidian's native editor (a new tab or pane, per the user's normal Obsidian behavior — `Cmd`/`Ctrl`-click for a new pane). This is the plugin's equivalent of a distraction-free "focus mode": full markdown editing, Obsidian's own autosave, and standard pane-splitting all come for free instead of being reimplemented.
+
+For a recurring meeting, opening the note shows the whole file, including every occurrence heading, in Obsidian's editor.
 
 ---
 
-## Command bar (dock)
+## 5. The six note types
 
-A single input at the bottom of the view.
+### 5.1 Draft
 
-**Default mode** — free text becomes the title of a new draft on `Enter`.
+Quick unstructured capture — the catchall when no other type fits. No extra fields. Badge color: warm gray.
 
-**Command mode** — typing `/` switches the bar: monospace font, accent color, dropdown rises above.
+**Auto-delete:** on plugin load, any `type: draft` note whose `createdAt` is more than 7 days ago is sent to `app.vault.trash()` (respecting the vault's configured trash location — never a hard delete).
+
+### 5.2 Task
+
+An action with a state.
+
+- `status`: `todo`, `done`, or `suspended`.
+- Badge color: amber.
+- Created the same way as any other note type: inline at the bottom of the feed, via the `/task` (status `todo`) or `/done` (status `done`, for logging things already finished) commands, or the **"New task from this note"** button on any expanded card.
+- Status pill: read-only on the collapsed card; in the expanded card, clicking it cycles `todo → done → suspended → todo` and saves immediately.
+- `done` tasks: title struck through, card dimmed. `suspended` tasks: dimmed further.
+
+### 5.3 Meeting
+
+Notes from a conversation.
+
+Common fields: `theme` (filterable), `attendees[]` (first names, shown inline on the card).
+
+#### Standalone
+
+- `subtype: standalone`. Body holds the entire set of notes from that one meeting.
+
+#### Recurring
+
+- `subtype: recurring`. Each occurrence is stored as a second-level heading (`## 2025-05-14`, ISO date) inside the single file's body. `occurrences[]` in frontmatter mirrors those dates for fast indexing, but the `##` headings in the body are the canonical structure.
+- Card subtype indicator: `N occurrences`.
+- Expanded card shows a row of date tabs, latest first and labeled "latest"; switching tabs reveals that occurrence's body. A **`+ new`** button adds a new `##` heading dated today and selects it.
+
+#### Meeting templates
+
+- A standalone or recurring meeting note may reference a **template** via a `template` frontmatter field (the template file's name).
+- A template is a regular `.md` file with `type: template` in frontmatter, containing only a list of `###` headings with no body content.
+- Creating a new occurrence (recurring) or a new meeting (standalone) with a template applies pre-fills the body with those headings as an empty scaffold.
+
+### 5.4 Thoughts
+
+An exploration of an idea or question.
+
+- `question` — shown above the body on the card and as a dedicated input field when expanded.
+- `landed` — optional takeaway/conclusion, shown as a "Where I landed" field below the body when expanded.
+- The `/thoughts [question]` command pre-fills the `question` field.
+- Badge color: muted plum.
+
+### 5.5 Knowledge
+
+Something worth remembering — a fact, snippet, quote, definition.
+
+- `techStack[]` — optional list of technologies/concepts, filterable. Card shows a small uppercase `STACK` label alongside it.
+- Badge color: moss green.
+
+### 5.6 Design
+
+Technical design of part of a project.
+
+- `status`: `exploring`, `in-review`, or `decided`. Filterable.
+- Badge color: dusty violet.
+
+---
+
+## 6. Markdown support
+
+Bodies render through Obsidian's own `MarkdownRenderer`, so all of Obsidian's native markdown support — headings, bold/italic/strikethrough, inline code and fenced code blocks with syntax highlighting, lists and task checkboxes, blockquotes, GFM tables, links, and Obsidian-style callouts (`> [!note]`, `> [!tip]`, `> [!warning]`, `> [!info]`, `> [!quote]`) — is supported with no custom rendering work.
+
+When a search/filter query is active, matching terms are wrapped in `<mark>` in both the collapsed card's body preview and the expanded card's rendered body.
+
+---
+
+## 7. The command bar (dock)
+
+A single input at the bottom of the view, with two modes.
+
+### Search mode (default)
+
+- Free text is a search query: matches AND across whitespace-separated terms, checked against `title`, `body`, `tags`, `projects`, `teams`, and every type-specific field.
+- Matches are highlighted (see §6) in card previews while the query is active.
+- When filters are active, the bar shows their chips to the left of the input (see §8).
+- Free text never creates a note — note creation only happens through `/` commands.
+
+### Command mode (`/`)
+
+Typing a leading `/` switches the bar into command mode: monospace font, accent color, dropdown rises above with arrow-key navigation. Pressing `/` from anywhere in the view focuses the bar and opens the dropdown.
+
+**Creation commands** — open a new note inline at the bottom of the feed, pre-filled with the rest of the typed text. The feed scrolls to reveal it, with a date divider reading "Writing a [type]" above it:
 
 | Command | Effect |
 |---|---|
-| `/draft [title]` | New draft note |
-| `/task [title]` | New task (status: `todo`) |
+| `/draft [title]` | New draft |
+| `/task [title]` | New task, status `todo` |
+| `/done [title]` | New task, status `done` |
 | `/meeting [title]` | New standalone meeting |
-| `/recurring [title]` | New recurring meeting |
-| `/thoughts [title]` | New thoughts note |
+| `/recurring [title]` | New recurring meeting with one occurrence dated today |
+| `/thoughts [question]` | New thoughts note, `question` pre-filled |
 | `/knowledge [title]` | New knowledge note |
 | `/design [title]` | New design note |
 
-The dropdown filters by prefix as you type. Arrow keys + `Enter`/`Tab` to select; `Esc` to cancel. After selecting a type, the bar stays active to receive the title — `Enter` creates the note.
+**Filter commands** — apply a filter to the feed:
+
+| Command | Effect |
+|---|---|
+| `/project [name]` | Filter by project; autocompletes from existing projects |
+| `/team [name]` | Filter by team; autocompletes from existing teams |
+| `/type [type]` | Filter by note type; autocompletes the six types. Selecting a type with a sub-attribute (task/design → status, meeting → theme, knowledge → techStack) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
+
+**Other:**
+
+| Command | Effect |
+|---|---|
+| `/clear` | Remove all active filters |
+
+The dropdown fuzzy-matches by prefix as the user types. `Tab` selects the highlighted command; `↑`/`↓` navigate it; `Enter` runs the selected command (or submits the typed search query, in search mode); `Esc` cancels and clears the bar.
 
 ---
 
-## Implementation status
+## 8. Filters
 
-### ✅ Done
+A filter narrows what the feed shows; all active filters AND together. Filter axes:
 
-- Custom `ItemView` registered as a full-width tab
-- Feed: chronological, day-grouped, scroll-to-bottom on open
-- Note cards: type badge (dot + label), project chips, body preview, tags, relative time
-- 2-step card: collapse → expand with rendered markdown + "Open note →" button
-- Inline project picker: add/remove with autocomplete, saves via `processFrontMatter`
-- Command bar: `/type title` creation, plain text → draft, animated dropdown
-- Frontmatter-based file creation with all common fields
-- Settings tab: configurable logbook folder
-- Live feed refresh on vault changes (vault events + metadata cache)
+- Free-text query (search)
+- Tags (multi-select)
+- Projects (multi-select)
+- Teams (multi-select)
+- Type (single)
+- Type-specific attribute (single, available once a type filter is set)
 
-### 🔲 Filtering and search
+### Filter chips
 
-The command bar doubles as a search/filter bar when not in command mode.
+Active filters appear as chips both in the header and inside the command bar, to the left of the input: a hashtag-prefixed pill for tags, a folder-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
 
-- **Free-text search**: AND across title, body, tags, projects, teams, type-specific fields. Matches highlighted in card previews.
-- **Filter commands**:
-  - `/project [name]` — filter by project (autocomplete from existing)
-  - `/team [name]` — filter by team
-  - `/type [type]` — filter by note type; types with sub-attributes (task→status, design→status, meeting→theme, knowledge→techStack) advance to a second step
-  - `/clear` — remove all active filters
-- Active filters shown as chips inside the command bar, each removable with ×.
-- `Backspace` on empty bar removes the most recent filter.
-- Clicking a tag, project chip, or type badge on a card applies that as a filter.
+### Removing filters
 
-### 🔲 Inline editing
+- Click the × on a chip.
+- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: tags → project → team → type → type attribute.
+- Run `/clear`.
 
-Edit a note without opening it in Obsidian's editor:
+### Clicking things
 
-- In expanded mode, title becomes an editable input.
-- Body switches between rendered preview and a `textarea` (toggle or click-to-edit).
-- Tags: same add/remove UX as the project picker (Enter or comma to add, Backspace to remove).
-- Teams: same as project picker.
-- Type-specific fields editable inline (task status, design status, thoughts prompt/landed, knowledge techStack).
-- Save on `⌘↵`; cancel on `Esc`. Autosaves after 600ms idle for expanded cards.
-- `updatedAt` only bumped if content actually changed.
+- Clicking a `#tag` on a card adds it to the active tag filters.
+- Clicking a project or team chip on a card adds it as an active project/team filter.
+- Clicking a type badge on a card sets it as the active type filter.
+- Clicking the todo count indicator in the header filters to `type: task` + `status: todo`.
 
-### 🔲 Tags editing (inline)
+This is the primary way users discover filtering — no query syntax to learn, just click.
 
-Same pattern as the project picker — already in the card header, chips with ×, input with autocomplete from all tags in the vault.
+---
 
-### 🔲 Task status toggle
+## 9. Tags, projects, teams
 
-- Status pill shown on task cards (and design cards): `todo`, `done`, `suspended`.
-- **Read-only** in collapsed cards.
-- **Editable** in expanded cards — clicking the pill cycles to the next status and saves immediately.
-- `done` tasks: title struck through, card dimmed.
-- `suspended` tasks: dimmed further.
+### Tags
 
-### 🔲 Todo count indicator
+- Free-form, lowercase, hyphenated. Created on the fly by typing a new value in any tag input.
+- The set of all tags is the union of every note's `tags[]`.
+- Tag inputs autocomplete from existing tags.
 
-A small ambient counter in the feed header showing the number of `type === 'task' && status === 'todo'` notes. Clicking it applies a task/todo filter.
+### Projects & teams
 
-### 🔲 Pin / unpin
+A note can belong to multiple projects and multiple teams; `projects[]`/`teams[]` hold arrays.
 
-- Hover a card → pin icon appears (top-right).
-- Clicking pins the note: `pinned: true` written to frontmatter.
-- Pinned notes move to the "Pinned" section at the bottom of the feed.
-- Pinned cards get a thin accent-colored left border.
+- Free-form, lowercase, hyphenated.
+- Visible as chips on collapsed cards and as inline pickers on expanded cards.
+- Picker: click opens a text input with autocomplete from existing values; type freely, `Enter` adds, `Backspace` on empty removes the last value.
+- Visual distinction: lab-icon chip for projects, people-icon chip for teams — team chips set in italic to reinforce "who" vs. "what".
 
-### 🔲 Draft auto-delete
+---
 
-On plugin load, any `type: draft` note whose `createdAt` is more than 7 days ago is moved to Obsidian's trash (respects the vault's trash setting — no hard delete).
+## 10. Collapse mode
 
-### 🔲 History horizon (infinite scroll up)
+The header's chevron button toggles collapse mode:
 
-- On initial load, only notes from the last month are shown.
-- A sentinel at the top of the feed: when scrolled into view, loads one more month of notes.
-- When a filter is active, the horizon is lifted — search spans the full vault.
+- Each card shows only its type badge and title, one per line — no body preview, no meta, no tags.
+- A second click restores the full view.
+- Persists for the session; resets on reload.
 
-### 🔲 Collapse mode
+---
 
-A chevron button in the feed header toggles **title-only mode**: each card shows only its type badge and title, one line, no preview. Useful for scanning a long feed quickly. Persists for the session.
+## 11. Pinning
 
-### 🔲 Recurring meetings
+Hovering a collapsed card reveals a pin icon. Pinning sets `pinned: true` via `processFrontMatter`; the note moves to the "Pinned" section at the bottom of the feed and gets a thin accent-colored left border.
 
-- `subtype: recurring` notes store each occurrence as a `## YYYY-MM-DD` heading in the body.
-- Expanded card shows a row of date tabs (latest first, labeled "latest"), one tab per occurrence.
-- A `+ new` button creates today's occurrence and selects it.
-- Tab switching reveals that occurrence's body.
+---
 
-### 🔲 Focus mode
+## 12. Theming
 
-Triggered from the "Open note →" button (or a dedicated expand icon). Opens the note in Obsidian's editor, but could alternatively open a full-screen modal within the plugin view for distraction-free editing with autosave.
+The plugin has no theme of its own — it uses Obsidian's CSS variables throughout, so it automatically matches whatever theme (light, dark, or community) the user already has active. The only fixed colors are the per-type badge accents (gray/amber/dusty blue/muted plum/moss green/dusty violet), chosen to read clearly against both light and dark Obsidian themes.
 
-### 🔲 Keyboard shortcuts
+---
+
+## 13. Keyboard shortcuts
 
 | Key | Action |
 |---|---|
-| `T` | Open quick-add task (when not typing in a field) |
-| `?` | Open shortcuts overlay |
-| `⌘↵` | Save in inline editor |
-| `Esc` | Cancel / collapse expanded card / clear command bar |
-| `⌫` | Remove last active filter (when command bar is empty) |
+| `/` | Open the command bar (from anywhere in the view) |
+| `?` | Open the shortcuts overlay |
+| `T` | Focus the command bar with `/task ` pre-filled |
+| `⌘ ↵` (or `Ctrl ↵`) | Save & collapse the open card |
+| `Esc` | Discard unsaved changes & collapse the open card / clear the command bar |
+| `⌫` | Remove the most recent active filter (when the command bar is empty) |
+| `↑ / ↓` | Navigate the command dropdown |
+| `↵` | Run the selected command, or submit the search query |
+
+Inside any tag/project/team input:
+
+| Key | Action |
+|---|---|
+| `Enter` | Add the typed value |
+| `,` | Add the typed value (alternate) |
+| `Backspace` (input empty) | Remove the last added value |
 
 ---
 
-## Obsidian-specific decisions
+## 14. Anti-features (on purpose)
 
-**`processFrontMatter`** is used for all frontmatter edits — it's Obsidian's official API for updating frontmatter without touching the body, and it handles YAML serialization correctly.
+- ~~Folders~~ — notes outside the configured logbook folder are untouched, and inside it there's no sub-foldering.
+- ~~A duplicate file explorer or graph view~~ — the plugin doesn't reimplement what Obsidian's core views already do; it's a typed, filterable feed layered on top.
+- ~~Sharing, comments, collaboration~~ — out of scope.
+- ~~A nested note hierarchy~~ — flat by design.
+- ~~A custom theme~~ — see §12; the plugin defers entirely to the user's installed Obsidian theme.
 
-**Metadata cache** (`app.metadataCache`) is the source of truth for all frontmatter reads — no file I/O needed for filtering or displaying metadata. Reads are synchronous and instant.
+---
 
-**Refresh suppression**: after a `processFrontMatter` call, vault events fire immediately. The feed suppresses re-renders for 600ms to avoid destroying the DOM while the user is still interacting with an editable field.
+## 15. Quick visual vocabulary
 
-**No custom sync**: notes are `.md` files in the vault — whatever sync the user has (iCloud, Obsidian Sync, git) handles them automatically.
+- **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), muted plum (thoughts), moss green (knowledge), dusty violet (design).
+- **Status pill** — tasks and design notes only. Read-only on the collapsed card; editable (click to cycle) on the expanded card.
+- **Project chip** — lab icon + value, background-tinted; multiple per note.
+- **Team chip** — people icon + value, italicised; multiple per note.
+- **Tag chip** — hashtag-prefixed pill.
+- **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
+- **Date dividers** — uppercase tracked-out label between two hairlines.
+- **Recurring occurrence tabs** — pill row, latest tab outlined in accent and labeled "latest".
+- **Todo count indicator** — ambient badge in the header showing the count of `todo` tasks; clickable to filter.
+- **Collapse toggle** — chevron icon in the header; toggles title-only view.
 
-**Trash, not delete**: destructive operations (draft auto-delete) use `app.vault.trash()` so files go to Obsidian's configured trash location, not to `/dev/null`.
+A consistent rule: dots, hashes, and icons prefix every chip so filter context is readable without relying on color.
+
+---
+
+## 16. Obsidian-specific implementation notes
+
+- **`processFrontMatter`** is used for all frontmatter edits — Obsidian's official API for updating frontmatter without touching the body, with correct YAML serialization.
+- **Metadata cache** (`app.metadataCache`) is the source of truth for all frontmatter reads — filtering and rendering card metadata never touches disk directly; reads are synchronous and instant.
+- **Refresh suppression** — after a `processFrontMatter` call, vault events fire immediately. The feed suppresses re-renders for 600 ms afterward so an open expanded card isn't torn down mid-edit.
+- **No custom sync** — notes are plain `.md` files in the vault; whatever sync the user already has (iCloud, Obsidian Sync, git) handles them.
+- **Trash, not delete** — destructive operations (draft auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting.
+- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`).
+- **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
