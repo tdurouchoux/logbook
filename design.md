@@ -80,12 +80,10 @@ pinned: false
 
 ## 3. The feed
 
-The plugin registers a full-width `ItemView` tab. Layout is a flex column:
+The plugin registers a full-width `ItemView` tab. Obsidian gives every pane its own title bar for free — that's where the view's two ambient actions live (see §10, §15) — so the view's own layout is just a flex column:
 
 ```
 ┌──────────────────────────────────────────┐
-│  Header: wordmark · todo count · ⌃ collapse │
-├──────────────────────────────────────────┤
 │  Feed (scrollable, flex:1)                │
 │  Oldest at top, newest at bottom          │
 │  Grouped by day with dividers             │
@@ -94,15 +92,6 @@ The plugin registers a full-width `ItemView` tab. Layout is a flex column:
 │  Dock (command bar)                       │
 └──────────────────────────────────────────┘
 ```
-
-### Header
-
-A thin header above the feed shows:
-
-- The plugin wordmark.
-- Active filter chips (mirrors the chips also shown in the dock — see §8).
-- The **todo count indicator**: an ambient badge showing the number of `type: task` notes with `status: todo`, updated live. Clicking it applies a `type: task` + `status: todo` filter.
-- The **collapse-mode toggle** (chevron icon — see §10).
 
 ### Order
 
@@ -300,7 +289,7 @@ A filter narrows what the feed shows; all active filters AND together. Filter ax
 
 ### Filter chips
 
-Active filters appear as chips both in the header and inside the command bar, to the left of the input: a hashtag-prefixed pill for tags, a folder-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
+Active filters appear as chips inside the command bar, to the left of the input: a hashtag-prefixed pill for tags, a folder-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
 
 ### Removing filters
 
@@ -313,7 +302,7 @@ Active filters appear as chips both in the header and inside the command bar, to
 - Clicking a `#tag` on a card adds it to the active tag filters.
 - Clicking a project or team chip on a card adds it as an active project/team filter.
 - Clicking a type badge on a card sets it as the active type filter.
-- Clicking the todo count indicator in the header filters to `type: task` + `status: todo`.
+- Clicking the todo count action in the pane's title bar filters to `type: task` + `status: todo`.
 
 This is the primary way users discover filtering — no query syntax to learn, just click.
 
@@ -340,7 +329,7 @@ A note can belong to multiple projects and multiple teams; `projects[]`/`teams[]
 
 ## 10. Collapse mode
 
-The header's chevron button toggles collapse mode:
+A chevron action in the pane's title bar (added via `addAction`) toggles collapse mode:
 
 - Each card shows only its type badge and title, one per line — no body preview, no meta, no tags.
 - A second click restores the full view.
@@ -403,8 +392,8 @@ Inside any tag/project/team input:
 - **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
 - **Date dividers** — uppercase tracked-out label between two hairlines.
 - **Recurring occurrence tabs** — pill row, latest tab outlined in accent and labeled "latest".
-- **Todo count indicator** — ambient badge in the header showing the count of `todo` tasks; clickable to filter.
-- **Collapse toggle** — chevron icon in the header; toggles title-only view.
+- **Todo count indicator** — a view action in the pane's title bar showing the count of `todo` tasks as a small badge; clickable to filter.
+- **Collapse toggle** — a chevron view action in the pane's title bar; toggles title-only view.
 
 A consistent rule: dots, hashes, and icons prefix every chip so filter context is readable without relying on color.
 
