@@ -79,7 +79,7 @@ updatedAt: <ISO>
 
 ## 3. The feed
 
-The plugin registers a full-width `ItemView` tab. Obsidian gives every pane its own title bar for free — that's where the view's two ambient actions live (see §10, §14) — so the view's own layout is just a flex column:
+The plugin registers a full-width `ItemView` tab. Obsidian gives every pane its own title bar for free — that's where the view's collapse-mode action lives (see §10) — so the view's own layout is just a flex column:
 
 ```
 ┌──────────────────────────────────────────┐
@@ -297,7 +297,6 @@ Active filters appear as chips inside the command bar, to the left of the input:
 - Clicking a `#tag` on a card adds it to the active tag filters.
 - Clicking a project or team chip on a card adds it as an active project/team filter.
 - Clicking a type badge on a card sets it as the active type filter.
-- Clicking the todo count action in the pane's title bar filters to `type: task` + `status: todo`.
 
 This is the primary way users discover filtering — no query syntax to learn, just click.
 
@@ -382,7 +381,6 @@ Inside any tag/project/team input:
 - **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
 - **Date dividers** — uppercase tracked-out label between two hairlines.
 - **Recurring occurrence tabs** — pill row, latest tab outlined in accent and labeled "latest".
-- **Todo count indicator** — a view action in the pane's title bar showing the count of `todo` tasks as a small badge; clickable to filter.
 - **Collapse toggle** — a chevron view action in the pane's title bar; toggles title-only view.
 
 A consistent rule: dots, hashes, and icons prefix every chip so filter context is readable without relying on color.
