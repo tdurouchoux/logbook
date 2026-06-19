@@ -138,7 +138,6 @@ First click expands the card in place:
 - Project/team/tag pickers become editable inline: chips with ×, free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
 - Body toggles between rendered preview and a raw `textarea` (click the body, or a pencil/eye toggle) for direct markdown editing.
 - Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`/occurrence tabs.
-- A **"View source"** toggle (`{ }`) shows the canonical `.md` representation — YAML frontmatter plus body — exactly as stored on disk.
 - A **"New task from this note"** button: creates a new inline task note pre-filled with the source note's projects/teams/tags, a body line `→ from [[<source note>]]`, and `sourceNoteId` set to the source's `id`.
 - Footer: hint text (`⌘↵ save / esc collapse`), tags row, and an **"Open note →"** button.
 - `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` for metadata and a debounced file write for the body.
