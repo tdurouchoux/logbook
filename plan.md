@@ -19,5 +19,6 @@ Tracks the gap between `design.md` and the plugin implementation (`plugin/`). Al
   2. Dropped the plugin-managed `updatedAt` field; the feed's sort key and time pills now read `file.stat.mtime` directly, so out-of-plugin body edits reorder the feed too.
   3. Removed the plugin's entire tag system (picker, chips, filter axis, click-to-filter). Tags are Obsidian's native feature now — the plugin doesn't touch them.
   4. Removed "New task from this note" (and `sourceNoteId`) entirely, no replacement.
+- **Phase 13 — Stable position while expanded (2026-06-20).** Frontmatter-only edits (status pill, project/team changes) bump `file.stat.mtime` exactly like body edits, which was reordering the feed out from under an open card. Fixed in `LogbookView.ts`: the expanded card's sort key is frozen at the timestamp it had when expanded, and only resumes tracking live `mtime` once it collapses.
 
 Everything in the original plan is implemented, type-checked, built, and confirmed in a live vault.

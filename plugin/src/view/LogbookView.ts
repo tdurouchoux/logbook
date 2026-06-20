@@ -22,6 +22,7 @@ export class LogbookView extends ItemView {
   private loadingMore = false;
 
   private expandedPath: string | null = null;
+  private frozenTimestamp: number | null = null;
   private pendingDivider: string | undefined;
   private pendingNotePath: string | undefined;
 
@@ -161,8 +162,15 @@ export class LogbookView extends ItemView {
     return this.allNotes.some((n) => activityTimestamp(n) < cutoff);
   }
 
+  /** Pins the expanded card's sort position so a frontmatter edit (e.g. a status pill click)
+   *  can't move the card the user is actively looking at out from under them. */
+  private sortKey(n: LogNote): number {
+    if (this.expandedPath === n.file.path && this.frozenTimestamp !== null) return this.frozenTimestamp;
+    return activityTimestamp(n);
+  }
+
   private renderDisplay() {
-    const notes = this.windowedNotes().sort((a, b) => activityTimestamp(a) - activityTimestamp(b));
+    const notes = this.windowedNotes().sort((a, b) => this.sortKey(a) - this.sortKey(b));
 
     const ctx: CardContext = {
       app: this.app,
@@ -173,9 +181,14 @@ export class LogbookView extends ItemView {
           .querySelectorAll(".logbook-card.is-expanded")
           .forEach((el) => el.classList.remove("is-expanded"));
         this.expandedPath = path;
+        const note = this.allNotes.find((n) => n.file.path === path);
+        this.frozenTimestamp = note ? activityTimestamp(note) : null;
       },
       collapse: (path) => {
-        if (this.expandedPath === path) this.expandedPath = null;
+        if (this.expandedPath === path) {
+          this.expandedPath = null;
+          this.frozenTimestamp = null;
+        }
         if (this.pendingNotePath === path) this.pendingNotePath = undefined;
       },
       pools: {

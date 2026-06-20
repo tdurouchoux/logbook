@@ -100,6 +100,7 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 - Sort key is each note's **latest activity timestamp**: the file's last-modified time (`file.stat.mtime`) for most notes, but for a recurring meeting it's the date of its most recent occurrence.
 - A newly created note always lands at the bottom of the feed, and the view scrolls to reveal it.
 - Day groups: `Today`, `Yesterday`, `Wednesday`, `Wed, May 14`, `May 14, 2024`.
+- **Stable position while expanded:** any frontmatter write — a status pill click, a project edit — bumps `file.stat.mtime` just like a body edit, but the feed doesn't resort an open card out from under the user. A card holds its current position for as long as it's expanded; it only moves to its new sorted position once it collapses. Without this, toggling a status pill mid-edit could make the card jump elsewhere in the feed and scroll out of view — disorienting, since the user's attention is still on it.
 
 ### History loading
 
@@ -140,7 +141,7 @@ First click expands the card in place. The card never renders the full body — 
 - Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`.
 - Footer: hint text (`⌘↵ save / esc collapse`) and an **"Open note →"** button.
 - `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` — there's no body write path from the expanded card at all.
-- No `updatedAt` bump to manage: any of these frontmatter writes updates `file.stat.mtime` automatically, which is what reorders the feed (see §2, §3).
+- No `updatedAt` bump to manage: any of these frontmatter writes updates `file.stat.mtime` automatically, which is what reorders the feed (see §2, §3) — but not while this card is the one expanded (see §3's stable-position rule).
 
 Second click on the card (outside an input) collapses it. Expanding a different card collapses whichever was open.
 
