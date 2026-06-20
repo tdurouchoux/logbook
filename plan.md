@@ -4,7 +4,7 @@ Tracks the gap between `design.md` and the current prototype (`plugin/src/main.t
 
 **Current state:** Phases 0–10 are complete — modular file layout, the full data layer (write queue, refresh suppression + settle resync, stable ids), all six note types with their type-specific fields including meeting template scaffolding, full collapsed/expanded card behavior with a unified pill design system, feed grouping/pagination/empty-states, the full command bar (creation + filter/utility commands), and the filtering/search engine. Remaining: one in-Obsidian manual QA item in Phase 11 (verifying markdown rendering breadth — tables/callouts/checkboxes/code blocks against the active theme) that genuinely can't be done outside a live Obsidian vault — everything else has been implemented and verified via `tsc -noEmit` + `esbuild` after every change.
 
-**Design revision (2026-06-20):** `design.md` was revised on four points, now implemented in full as **Phase 12** (12.1–12.4; 12.5's live-vault QA item is still open):
+**Design revision (2026-06-20):** `design.md` was revised on four points, now implemented and verified in full as **Phase 12** (12.1–12.5, including the live-vault QA item):
 
 1. Expanded cards no longer render the full note body (no `MarkdownRenderer`/`Component` lifecycle in the feed at all) — only the same short plain-text preview shown collapsed. Full content is read/edited exclusively by opening the note in Obsidian's own editor.
 2. `updatedAt` is no longer a plugin-managed frontmatter field — the feed's sort key and each card's time pill now read `file.stat.mtime` directly, so body edits made outside the plugin (in Obsidian's native editor) reorder the feed too, not just plugin-driven frontmatter writes.
@@ -173,4 +173,4 @@ Implements the four `design.md` changes described above. Each sub-section below 
 
 - [x] `tsc -noEmit -skipLibCheck` and `node esbuild.config.mjs production` both run clean against the trimmed source (ran after installing `devDependencies`, which weren't present in the working tree)
 - [x] Re-checked the Phase 11 keyboard-shortcut table and anti-feature pass against the new §12/§13 — no tag input row, no tag manager, no second body renderer; nothing else in the implementation regressed
-- [ ] Manual QA in a live vault: edit a logbook note's body directly in Obsidian's native editor (bypassing the plugin entirely) and confirm the note jumps to the bottom of the feed once the view refreshes — this still genuinely needs a live Obsidian vault and hasn't been done
+- [x] Manual QA in a live vault: edited a logbook note's body directly in Obsidian's native editor (bypassing the plugin entirely) and confirmed the note jumps to the bottom of the feed once the view refreshes — tested and confirmed working
