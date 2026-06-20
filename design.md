@@ -128,21 +128,20 @@ Body preview — 2 lines, plain text…
 - Top row, left to right: the type badge, then — if the type has one (see §2) — its filterable-property pill (`status` for task/design, `subtype` for meeting), then a project pill per value (briefcase icon) and a team pill per value (people icon). Any of these the note doesn't have is simply absent from the row; nothing reserves space for it.
 - Top right: the chevron (closed state) and the note's "age" — a relative-time pill (`2h`, `3d`, …).
 - Middle: the title.
-- Bottom: the same 2-line plain-text body preview as the expanded card (see §6).
+- Bottom: a 2-line plain-text body preview (see §6) — shown only while collapsed; it disappears once the card expands, since expanding opens the real note in Obsidian's editor instead.
 - `done` tasks render with the title struck through and the card dimmed; `suspended` tasks dimmed further.
 - **Clicking any pill in the top row (badge, filterable-property pill, project pill, team pill) applies it as a filter (see §8) — it never expands the card.** Clicking anywhere else on the card (title, preview, top-right area) expands it.
 
 ### Expanded
 
-First click (anywhere except a top-row pill) expands the card in place. The card never renders the full body — that's deliberately out of scope (see "Opening in Obsidian's editor" below); the same short, plain-text preview from the collapsed state stays visible.
+First click (anywhere except a top-row pill) expands the card in place **and simultaneously opens the underlying note in Obsidian's native editor** (see "Opening in Obsidian's editor" below) — there's no separate button for it. Because the real body is now visible in the editor, the card itself drops its body preview the moment it expands; only the editable frontmatter fields remain on the card.
 
 ```
 [badge]                                       [△] [2h]
 Note title (editable)
 [filter-pill] [💼 proj1 ×] [👤 team1 ×] [+ project] [+ team]
 other type-specific fields…
-Body preview — 2 lines, plain text…
-⌘↵ save / esc collapse                  Open note →
+⌘↵ save / esc collapse
 ```
 
 - Top left: type badge only — the filterable-property pill and the project/team pills move down into the field block below, since they're editable there now.
@@ -153,16 +152,16 @@ Body preview — 2 lines, plain text…
     - **Task/design's `status` pill:** no longer filters while expanded — clicking it instead cycles to the next status (`todo → done → suspended → todo`, or `exploring → in-review → decided → exploring`) and saves immediately. There's no `×` or removal — every task/design note always has a status.
     - **Meeting's `subtype` pill:** stays read-only/filter-only even while expanded — clicking it applies the subtype filter, exactly as collapsed. There's no edit affordance, since a meeting can't be converted between standalone and recurring after creation.
   - Remaining type-specific fields with no pill treatment — thoughts' `question`/`landed`, meeting's `theme`/`attendees`, knowledge's `techStack` (not filterable, see §2) — are plain labeled inputs/pickers, not pills, and carry no filter-on-click behavior.
-- Bottom: the same 2-line preview as collapsed.
-- Footer: hint text (`⌘↵ save / esc collapse`) and an **"Open note →"** button.
+- No body preview while expanded — see above.
+- Footer: just the hint text (`⌘↵ save / esc collapse`); there's no button here anymore since opening the note already happened on expand.
 - `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` — there's no body write path from the expanded card at all.
 - No `updatedAt` bump to manage: any of these frontmatter writes updates `file.stat.mtime` automatically, which is what reorders the feed (see §2, §3) — but not while this card is the one expanded (see §3's stable-position rule).
 
-Second click on the card (outside an input or a filtering pill) collapses it. Expanding a different card collapses whichever was open.
+Second click on the card (outside an input or a filtering pill) collapses it. Expanding a different card collapses whichever was open (and opens that note in the editor instead).
 
 ### Opening in Obsidian's editor
 
-Editing the body is never done inline in the feed — only frontmatter fields (title, projects, teams, type-specific fields) are editable on the expanded card, and the body is never even rendered there, only previewed as plain text. To read or write body content, the **"Open note →"** button opens the underlying `.md` file in Obsidian's native editor (a new tab or pane, per the user's normal Obsidian behavior — `Cmd`/`Ctrl`-click for a new pane). This sidesteps maintaining a second renderer or a second text buffer for the same file: Obsidian's own editor/reading view is the single place body content is ever displayed or edited, with its own autosave, markdown rendering, and pane-splitting.
+Editing the body is never done inline in the feed — only frontmatter fields (title, projects, teams, type-specific fields) are editable on the expanded card, and the body is never even rendered there. Expanding a card opens the underlying `.md` file in Obsidian's native editor at the same moment (a new tab or pane, per the user's normal Obsidian behavior — `Cmd`/`Ctrl`-click for a new pane) — this is automatic, not a separate click. This sidesteps maintaining a second renderer or a second text buffer for the same file: Obsidian's own editor/reading view is the single place body content is ever displayed or edited, with its own autosave, markdown rendering, and pane-splitting.
 
 For a recurring meeting, opening the note shows the whole file, including every occurrence heading, in Obsidian's editor.
 
@@ -202,7 +201,7 @@ Common fields: `theme` (plain field, not filterable), `attendees[]` (first names
 
 `subtype` is the meeting type's filterable attribute (see §2, §4): it renders as a pill on every meeting card, clicking it always applies a `subtype` filter — collapsed or expanded — and it's never editable from the card, since a meeting can't be converted between standalone and recurring after creation.
 - Card subtype indicator: `N occurrences`, plus the date of the latest one.
-- There is no inline occurrence UI on the card — expanding it shows the same short preview like any other note (see §4); the full history of occurrences is only visible by opening the note in Obsidian's editor. Adding today's occurrence is a command, not a feed interaction: see **`/occurrence`** in §7.
+- There is no inline occurrence UI on the card — expanding it opens the note in Obsidian's editor, same as any other note (see §4), which is where the full history of occurrences is visible. Adding today's occurrence is a command, not a feed interaction: see **`/occurrence`** in §7.
 
 #### Meeting templates
 
@@ -237,9 +236,9 @@ Technical design of part of a project.
 
 ## 6. Markdown support
 
-The feed never renders a note's body as markdown — only a plain-text preview (markdown syntax stripped beyond headings/bold/italic/links, clamped to two lines), identical whether the card is collapsed or expanded. Full markdown support — headings, bold/italic/strikethrough, code blocks with syntax highlighting, task checkboxes, GFM tables, links, Obsidian-style callouts, and everything else — is simply whatever Obsidian's own native editor and reading view already provide once the note is opened (see §4, "Opening in Obsidian's editor"). The plugin does no rendering work for any of it.
+The feed never renders a note's body as markdown — only a plain-text preview (markdown syntax stripped beyond headings/bold/italic/links, clamped to two lines), shown only on the collapsed card. Expanding a card opens the real note in Obsidian's native editor instead (see §4, "Opening in Obsidian's editor"), so there's nothing left to preview once it's open. Full markdown support — headings, bold/italic/strikethrough, code blocks with syntax highlighting, task checkboxes, GFM tables, links, Obsidian-style callouts, and everything else — is simply whatever Obsidian's own native editor and reading view already provide. The plugin does no rendering work for any of it.
 
-When a search/filter query is active, matching terms are wrapped in `<mark>` in the body preview, on both collapsed and expanded cards.
+When a search/filter query is active, matching terms are wrapped in `<mark>` in the body preview — the only place a preview is shown, since it's collapsed-only.
 
 ---
 
@@ -395,7 +394,7 @@ Inside any project/team input:
 - ~~A nested note hierarchy~~ — flat by design.
 - ~~A custom theme~~ — see §11; the plugin defers entirely to the user's installed Obsidian theme.
 - ~~A tag manager~~ — tags are edited via Obsidian's own Properties panel, inline `#tags`, and tag pane; see §9. The plugin doesn't add a picker, chips, or a filter axis on top of them.
-- ~~A second body renderer~~ — the feed only ever shows a plain-text preview; full markdown rendering happens once, in Obsidian's own editor/reading view, when the note is opened (see §4, §6).
+- ~~A second body renderer~~ — the feed only ever shows a plain-text preview, and only while collapsed; full markdown rendering happens once, in Obsidian's own editor/reading view, the moment a card is expanded and the note opens automatically (see §4, §6).
 
 ---
 
