@@ -4,13 +4,14 @@ Tracks the gap between `design.md` and the current prototype (`plugin/src/main.t
 
 **Current state:** Phases 0–10 are complete — modular file layout, the full data layer (write queue, refresh suppression + settle resync, stable ids), all six note types with their type-specific fields including meeting template scaffolding, full collapsed/expanded card behavior with a unified pill design system, feed grouping/pagination/empty-states, the full command bar (creation + filter/utility commands), and the filtering/search engine. Remaining: one in-Obsidian manual QA item in Phase 11 (verifying markdown rendering breadth — tables/callouts/checkboxes/code blocks against the active theme) that genuinely can't be done outside a live Obsidian vault — everything else has been implemented and verified via `tsc -noEmit` + `esbuild` after every change.
 
-**Design revision (2026-06-20):** `design.md` was revised on three points, which the implementation hasn't caught up to yet:
+**Design revision (2026-06-20):** `design.md` was revised on four points, which the implementation hasn't caught up to yet:
 
 1. Expanded cards no longer render the full note body (no `MarkdownRenderer`/`Component` lifecycle in the feed at all) — only the same short plain-text preview shown collapsed. Full content is read/edited exclusively by opening the note in Obsidian's own editor.
 2. `updatedAt` is no longer a plugin-managed frontmatter field — the feed's sort key and each card's time pill now read `file.stat.mtime` directly, so body edits made outside the plugin (in Obsidian's native editor) reorder the feed too, not just plugin-driven frontmatter writes.
 3. The plugin's own tag system (picker, chips, tag-click-to-filter, tag filter axis, tag search field) is removed entirely. Tags are Obsidian's native feature (frontmatter `tags`, inline `#tags`, the tag pane) — the plugin doesn't touch them.
+4. The "New task from this note" button (and the `sourceNoteId` field it set) is removed entirely — no replacement, just gone.
 
-Several items already checked off below (tag chips/picker, body-render `Component` lifecycle, `updatedAt` bump logic) implement the *old* design and are now superseded — they're annotated in place below and the concrete rollback/rework is tracked as **Phase 12**.
+Several items already checked off below (tag chips/picker, body-render `Component` lifecycle, `updatedAt` bump logic, "New task from this note") implement the *old* design and are now superseded — they're annotated in place below and the concrete rollback/rework is tracked as **Phase 12**.
 
 ---
 
@@ -65,7 +66,7 @@ The entire prototype lives in one 700-line `main.ts`. Split it before piling on 
 - [x] Team picker (chips + ×, autocomplete, italic styling) — mirror the existing project picker, generalize shared picker logic into one reusable component instead of duplicating
 - [x] Tag picker (chips + ×, autocomplete, `Enter`/`,` to add, `Backspace` on empty removes last) *(superseded — no plugin-managed tag picker; tags are edited via Obsidian's own Properties UI; see Phase 12)*
 - [x] Type-specific editable fields per type (status pill cycle-on-click + immediate save; thoughts' `question`/`landed`; knowledge's `techStack`; meeting's `theme`/`attendees`)
-- [x] "New task from this note" button: creates a task note pre-filled with source's projects/teams/tags, a body backlink via `app.fileManager.generateMarkdownLink()`, and `sourceNoteId` set to source's `id`
+- [x] "New task from this note" button: creates a task note pre-filled with source's projects/teams/tags, a body backlink via `app.fileManager.generateMarkdownLink()`, and `sourceNoteId` set to source's `id` *(superseded — feature removed entirely per design revision; see Phase 12)*
 - [x] Footer hint text (`⌘↵ save / esc collapse`)
 - [x] `⌘↵` saves + collapses; `Esc` discards unsaved edits and collapses (currently only the dock has Enter/Esc handling, not the card)
 - [x] 600ms autosave-after-typing-settles for all editable fields, going through the Phase 1 write queue
@@ -127,7 +128,7 @@ The entire prototype lives in one 700-line `main.ts`. Split it before piling on 
 
 ## Phase 12 — Design revision: preview-only cards, mtime-based activity, native tags
 
-Implements the three `design.md` changes described above. Each sub-section below names the files/lines as they stand today; verify with `tsc -noEmit` + `esbuild` after each, same as every prior phase.
+Implements the four `design.md` changes described above. Each sub-section below names the files/lines as they stand today; verify with `tsc -noEmit` + `esbuild` after each, same as every prior phase.
 
 ### 12.1 Drop in-feed body rendering (§4, §6)
 
@@ -157,7 +158,18 @@ Implements the three `design.md` changes described above. Each sub-section below
 - [ ] Leave `plugin/src/view/pickers.ts` itself alone — it's the generic chip+autocomplete component and still has two callers (projects, teams) after the tag picker call site is deleted from `card.ts`
 - [ ] Confirm `createNote` no longer needs a `tags` pool/value at all — if a user adds Obsidian-native tags to a logbook note afterward (via Properties panel or inline `#tag`), the plugin should just leave that frontmatter key untouched on every subsequent `processFrontMatter` write (this falls out for free from only mutating the specific keys each write already touches, never the whole object)
 
-### 12.4 Re-verification
+### 12.4 Remove "New task from this note" (§4, §5.2)
+
+- [ ] `plugin/src/note-store.ts`: delete `createTaskFromNote()` entirely (note-store.ts:229-241)
+- [ ] `plugin/src/types.ts`: drop `sourceNoteId?: string` from `TaskFrontmatter` (types.ts:74)
+- [ ] `plugin/src/note-store.ts`: drop the `sourceNoteId` normalization in `normalizeFrontmatter` (note-store.ts:286)
+- [ ] `plugin/src/view/card.ts`: delete the "New task from this note" button block in the expanded footer (card.ts:187-196), including the `note.fm.type !== "task"` guard around it
+- [ ] `plugin/src/view/card.ts`: drop `onCreateTaskFromNote` from `CardContext`
+- [ ] `plugin/src/view/LogbookView.ts`: delete `createTaskFromNote()` (LogbookView.ts:266-270ish) and the `onCreateTaskFromNote` wiring passed into the card context (LogbookView.ts:217)
+- [ ] Check `plugin/styles.css` for a now-orphaned `.logbook-new-task-btn` rule and remove it
+- [ ] No migration needed for existing task notes that already carry a stray `sourceNoteId` from before — same as the `updatedAt` leftover-key case in 12.2, it's just inert once nothing reads or writes it
+
+### 12.5 Re-verification
 
 - [ ] Re-run the Phase 11 keyboard-shortcut audit against the trimmed §12 table (no tag input row)
 - [ ] Re-run the Phase 11 anti-feature pass against the two new bullets in §13 (no tag manager, no second body renderer)

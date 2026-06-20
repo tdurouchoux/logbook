@@ -52,7 +52,7 @@ createdAt: <ISO>
 
 There is no plugin-managed `updatedAt` field. "Last activity" is read straight off the file itself — `file.stat.mtime`, which Obsidian already maintains for every file on every write, whether that write came from the plugin (a frontmatter edit) or from editing the body directly in Obsidian's native editor. Re-opening and closing a note without edits doesn't touch `mtime`, so it doesn't reorder the feed either.
 
-`id` is a stable identifier minted on creation (a short random/UUID string). It's what notes like a task's `sourceNoteId` link back to — filenames and titles can change without breaking that link.
+`id` is a stable identifier minted on creation (a short random/UUID string) — filenames and titles can change without breaking anything that might reference a note by it.
 
 Tags are not a plugin-managed field. A note may or may not carry a `tags` frontmatter property — that's entirely Obsidian's own tag system (frontmatter `tags`, inline `#tags` in the body, the built-in tag pane and search). The plugin neither writes, edits, displays, nor filters by it; see §9.
 
@@ -61,7 +61,7 @@ Tags are not a plugin-managed field. A note may or may not carry a `tags` frontm
 | Type | Extra fields | Badge color |
 |---|---|---|
 | **Draft** | *(none)* — auto-deleted 7 days after `createdAt` | warm gray |
-| **Task** | `status: todo \| done \| suspended`, optional `sourceNoteId` | amber |
+| **Task** | `status: todo \| done \| suspended` | amber |
 | **Meeting** | `subtype: standalone \| recurring`, `theme`, `attendees[]` + for recurring: `occurrences[]`; either subtype may carry `template` (filename reference) | dusty blue |
 | **Thoughts** | `question`, `landed` | muted plum |
 | **Knowledge** | `techStack[]` | moss green |
@@ -138,7 +138,6 @@ First click expands the card in place. The card never renders the full body — 
 - Title becomes an editable input.
 - Project/team pickers become editable inline: chips with ×, free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
 - Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`.
-- A **"New task from this note"** button: creates a new inline task note pre-filled with the source note's projects/teams, a body line linking back to the source (generated via `app.fileManager.generateMarkdownLink()` so it respects the user's link-format settings, rather than a hardcoded `[[Title]]`), and `sourceNoteId` set to the source's `id`.
 - Footer: hint text (`⌘↵ save / esc collapse`) and an **"Open note →"** button.
 - `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` — there's no body write path from the expanded card at all.
 - No `updatedAt` bump to manage: any of these frontmatter writes updates `file.stat.mtime` automatically, which is what reorders the feed (see §2, §3).
@@ -167,7 +166,7 @@ An action with a state.
 
 - `status`: `todo`, `done`, or `suspended`.
 - Badge color: amber.
-- Created the same way as any other note type: inline at the bottom of the feed, via the `/task` (status `todo`) or `/done` (status `done`, for logging things already finished) commands, or the **"New task from this note"** button on any expanded card.
+- Created the same way as any other note type: inline at the bottom of the feed, via the `/task` (status `todo`) or `/done` (status `done`, for logging things already finished) commands.
 - Status pill: read-only on the collapsed card; in the expanded card, clicking it cycles `todo → done → suspended → todo` and saves immediately.
 - `done` tasks: title struck through, card dimmed. `suspended` tasks: dimmed further.
 
