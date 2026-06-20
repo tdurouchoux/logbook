@@ -123,6 +123,23 @@ export class LogbookView extends ItemView {
     this.renderDisplay();
   }
 
+  /** The expanded card's trash button (design.md §4) — soft-deletes via the store,
+   *  discarding any staged edits outright. The card's own removal from the feed is
+   *  driven by the vault "delete" event (registered in onOpen) like any other live
+   *  refresh, not handled specially here. */
+  private async deleteNote(path: string) {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) return;
+    if (this.expandedPath === path) {
+      this.expandedPath = null;
+      this.frozenTimestamp = null;
+      this.activeCloseHandler = null;
+    }
+    if (this.pendingNotePath === path) this.pendingNotePath = undefined;
+    this.cardCache.delete(path);
+    await this.store.deleteNote(file);
+  }
+
   /** Backing the global `Mod+Enter` command (main.ts) — closing a card moves focus
    *  into the opened note's editor, so the shortcut can't be a card-scoped listener. */
   closeActiveCard() {
@@ -221,6 +238,7 @@ export class LogbookView extends ItemView {
         if (this.pendingNotePath === path) this.pendingNotePath = undefined;
       },
       discardEdits: (path) => void this.discardEdits(path),
+      deleteNote: (path) => void this.deleteNote(path),
       pools: {
         projects: () => this.collectPool((n) => n.fm.projects),
         teams: () => this.collectPool((n) => n.fm.teams),

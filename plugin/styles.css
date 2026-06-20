@@ -750,6 +750,41 @@
     margin-right: auto;
 }
 
+/* Trash button, pinned to the bottom-right of the footer by .logbook-kbd-hint's
+   margin-right: auto above. Two-click confirm (design.md §4): .is-armed is the
+   "click again to delete" state. */
+.logbook-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+.logbook-delete-btn svg {
+    width: 14px;
+    height: 14px;
+}
+.logbook-delete-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-error);
+}
+.logbook-delete-btn.is-armed {
+    background: var(--text-error);
+    color: var(--text-on-accent);
+}
+.logbook-delete-btn.is-armed:hover {
+    background: var(--text-error);
+    color: var(--text-on-accent);
+}
+
 /* ── Filter chips (in the dock) ─────────────────────────────────────────── */
 
 .logbook-filter-chips {

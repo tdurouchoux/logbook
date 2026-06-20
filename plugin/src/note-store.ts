@@ -232,6 +232,11 @@ export class NoteStore {
     });
   }
 
+  /** Manual delete from the card's trash button (design.md §4) — trash, never hard-delete. */
+  async deleteNote(file: TFile): Promise<void> {
+    await this.app.vault.trash(file, true);
+  }
+
   /** Trash (never hard-delete) draft notes older than 7 days, per design.md §5.1. */
   async pruneOldDrafts(): Promise<void> {
     const notes = await this.loadNotes();

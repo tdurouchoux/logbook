@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, setIcon } from "obsidian";
 import {
   LogNote,
   NoteType,
@@ -24,6 +24,7 @@ export interface CardContext {
   registerCloseHandler(path: string, onForceClose: () => void | Promise<void>): void;
   collapse(path: string): void;
   discardEdits(path: string): void;
+  deleteNote(path: string): void;
   pools: { projects(): string[]; teams(): string[]; templates(): string[] };
   searchQuery: string;
   onFilterProject(p: string): void;
@@ -236,6 +237,35 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
 
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
+
+  // Soft-delete (design.md §4): first click arms it, second click while armed
+  // actually deletes — a single accidental click can't trash anything.
+  const deleteBtn = expandFooter.createEl("button", {
+    cls: "logbook-delete-btn",
+    attr: { type: "button", "aria-label": "Delete note" },
+  });
+  setIcon(deleteBtn, "trash-2");
+  let armed = false;
+  let disarmTimer: ReturnType<typeof setTimeout> | null = null;
+  const disarm = () => {
+    armed = false;
+    if (disarmTimer) clearTimeout(disarmTimer);
+    disarmTimer = null;
+    deleteBtn.removeClass("is-armed");
+    deleteBtn.setAttribute("aria-label", "Delete note");
+  };
+  deleteBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!armed) {
+      armed = true;
+      deleteBtn.addClass("is-armed");
+      deleteBtn.setAttribute("aria-label", "Click again to delete");
+      disarmTimer = setTimeout(disarm, 3000);
+      return;
+    }
+    disarm();
+    ctx.deleteNote(note.file.path);
+  });
 
   // ── Expand / collapse toggle ────────────────────────────────────────────
   // The card never renders the body inline — expanding opens the real note in
