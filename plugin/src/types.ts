@@ -32,14 +32,13 @@ export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
     label: "Meeting",
     color: "#5b8db8",
     desc: "Notes from a conversation",
-    filterAttr: { key: "theme", label: "Theme" },
+    filterAttr: { key: "subtype", label: "Subtype" },
   },
   thoughts: { label: "Thoughts", color: "#8a5cb2", desc: "Exploration of an idea" },
   knowledge: {
     label: "Knowledge",
     color: "#7a9956",
     desc: "Something worth remembering",
-    filterAttr: { key: "techStack", label: "Tech" },
   },
   design: {
     label: "Design",
@@ -51,6 +50,7 @@ export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
 
 export const TASK_STATUSES: TaskStatus[] = ["todo", "done", "suspended"];
 export const DESIGN_STATUSES: DesignStatus[] = ["exploring", "in-review", "decided"];
+export const MEETING_SUBTYPES: MeetingSubtype[] = ["standalone", "recurring"];
 
 export const ALL_COMMANDS = (Object.entries(NOTE_TYPES) as [NoteType, NoteTypeConfig][]).map(
   ([key, cfg]) => ({ key, ...cfg })
@@ -61,17 +61,14 @@ export interface CommonFrontmatter {
   id: string;
   type: NoteType;
   title: string;
-  tags: string[];
   projects: string[];
   teams: string[];
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface TaskFrontmatter extends CommonFrontmatter {
   type: "task";
   status: TaskStatus;
-  sourceNoteId?: string;
 }
 
 export interface MeetingFrontmatter extends CommonFrontmatter {
@@ -134,12 +131,29 @@ export function isDesign(n: LogNote): n is LogNote & { fm: DesignFrontmatter } {
   return n.fm.type === "design";
 }
 
-/** Sort key per design.md §3: updatedAt, except recurring meetings use latest occurrence. */
+/** "YYYY-MM-DD" parsed as a local-midnight Date — the bare `Date` string constructor
+ *  treats date-only strings as UTC, which can land on the wrong local calendar day. */
+function localDateFromISO(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+/** Sort key per design.md §3: file.stat.mtime, except recurring meetings use latest occurrence —
+ *  unless that occurrence is today, in which case file.stat.mtime is used instead. A bare
+ *  occurrence date has no time-of-day, so it would otherwise always sort earlier than every
+ *  other note touched today (which carry a real intraday mtime), pinning a just-created or
+ *  just-edited recurring meeting to the top of "Today" instead of the bottom. */
 export function activityTimestamp(n: LogNote): number {
   if (isMeeting(n) && n.fm.subtype === "recurring" && n.fm.occurrences?.length) {
-    const latest = n.fm.occurrences[0];
-    const t = new Date(latest).getTime();
-    if (!Number.isNaN(t)) return t;
+    const occDate = localDateFromISO(n.fm.occurrences[0]);
+    if (!Number.isNaN(occDate.getTime())) {
+      const today = new Date();
+      const isToday =
+        occDate.getFullYear() === today.getFullYear() &&
+        occDate.getMonth() === today.getMonth() &&
+        occDate.getDate() === today.getDate();
+      return isToday ? n.file.stat.mtime : occDate.getTime();
+    }
   }
-  return new Date(n.fm.updatedAt).getTime();
+  return n.file.stat.mtime;
 }

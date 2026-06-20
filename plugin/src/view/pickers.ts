@@ -1,7 +1,10 @@
+import { setIcon } from "obsidian";
+
 /**
  * Reusable chip + autocomplete picker for tags/projects/teams. Renders current
- * values as removable chips plus a free-text input (hidden via CSS unless the
- * owning card is expanded) with autocomplete from a candidate pool.
+ * values as removable chips plus a "+" button (hidden via CSS unless the
+ * owning card is expanded); clicking it reveals a free-text input with
+ * autocomplete from a candidate pool, closing back to "+" on blur.
  */
 export interface PickerOptions {
   values: string[];
@@ -9,18 +12,21 @@ export interface PickerOptions {
   placeholder: string;
   chipClass: string;
   prefix?: string; // e.g. "#" for tags
+  icon?: string; // Lucide icon id rendered before each chip's label, via setIcon()
   onChange: (next: string[]) => void | Promise<void>;
 }
 
 export function renderPicker(container: HTMLElement, opts: PickerOptions) {
   container.addEventListener("click", (e) => e.stopPropagation());
+  const label = opts.placeholder.replace(/^\+\s*/, "");
 
-  const render = (values: string[]) => {
+  const render = (values: string[], keepOpen = false) => {
     container.empty();
 
     for (const v of values) {
       const chip = container.createEl("span", { cls: opts.chipClass });
-      chip.createEl("span", { text: opts.prefix ? `${opts.prefix}${v}` : v });
+      if (opts.icon) setIcon(chip.createSpan({ cls: "logbook-pill-icon" }), opts.icon);
+      chip.createEl("span", { cls: "logbook-pill-label", text: opts.prefix ? `${opts.prefix}${v}` : v });
       const x = chip.createEl("button", { cls: "logbook-chip-remove", text: "×" });
       x.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -30,10 +36,16 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
       });
     }
 
+    const addBtn = container.createEl("button", {
+      cls: "logbook-picker-add-btn",
+      attr: { type: "button", "aria-label": `Add ${label}` },
+    });
+    setIcon(addBtn, "plus");
+
     const inputWrap = container.createDiv("logbook-picker-input-wrap");
     const input = inputWrap.createEl("input", {
       cls: "logbook-picker-input",
-      attr: { type: "text", placeholder: opts.placeholder, spellcheck: "false" },
+      attr: { type: "text", placeholder: label, spellcheck: "false" },
     });
     const suggestEl = inputWrap.createDiv("logbook-picker-suggestions");
     suggestEl.style.display = "none";
@@ -41,6 +53,24 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
     let filtered: string[] = [];
     let suggestIdx = 0;
     let pickingFromList = false;
+
+    const open = () => {
+      addBtn.addClass("is-hidden");
+      inputWrap.addClass("is-open");
+      input.focus();
+    };
+    const close = () => {
+      addBtn.removeClass("is-hidden");
+      inputWrap.removeClass("is-open");
+      input.value = "";
+      suggestEl.style.display = "none";
+    };
+    if (keepOpen) open();
+
+    addBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      open();
+    });
 
     const renderSuggestions = () => {
       suggestEl.empty();
@@ -70,10 +100,8 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
       pickingFromList = false;
       if (!name || values.includes(name)) return;
       const updated = [...values, name];
-      input.value = "";
-      suggestEl.style.display = "none";
       await opts.onChange(updated);
-      render(updated);
+      render(updated, true);
     };
 
     input.addEventListener("input", () => {
@@ -88,6 +116,10 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
     });
 
     input.addEventListener("keydown", async (e) => {
+      // Cmd/Ctrl+Enter is the card's save-and-close shortcut (design.md §4/§18) —
+      // leave it alone here so it bubbles up to the card's own listener instead
+      // of being treated as "add this value".
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) return;
       if (e.key === "Enter" || e.key === ",") {
         e.preventDefault();
         e.stopPropagation();
@@ -104,16 +136,16 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
         e.stopPropagation();
         const updated = values.slice(0, -1);
         await opts.onChange(updated);
-        render(updated);
+        render(updated, true);
       } else if (e.key === "Escape") {
-        e.stopPropagation();
-        input.value = "";
-        suggestEl.style.display = "none";
+        // Don't stop propagation: let the card's own Escape handler (discard
+        // edits) also see this, same as Esc on any other field input.
+        input.blur();
       }
     });
 
     input.addEventListener("blur", () => {
-      if (!pickingFromList) suggestEl.style.display = "none";
+      if (!pickingFromList) close();
     });
   };
 

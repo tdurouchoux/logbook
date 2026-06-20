@@ -92,7 +92,7 @@
     gap: 6px;
     margin-bottom: 6px;
 }
-/* Badge left, project-row takes flex:1 middle, chevron + time right */
+/* Badge left, pills-row takes flex:1 middle, chevron + time right */
 
 .logbook-time {
     font-size: 11px;
@@ -119,13 +119,6 @@
     overflow: hidden;
 }
 
-.logbook-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 7px;
-}
-
 /* ── Pills — shared base for every chip/pill in the UI ──────────────────── */
 /* One consistent shape + interaction language (rounded, animated, tactile)
    so project/team/tag/attendee/stack/status/filter pills read as one family
@@ -143,19 +136,6 @@
 }
 .logbook-pill:active {
     transform: scale(0.94);
-}
-
-.logbook-tag {
-    font-size: 10.5px;
-    font-weight: 500;
-    color: var(--text-muted);
-    background: var(--background-modifier-hover);
-    padding: 2px 8px;
-    cursor: pointer;
-}
-.logbook-tag:hover {
-    background: var(--background-modifier-border-hover);
-    color: var(--text-normal);
 }
 
 /* ── Type badge ──────────────────────────────────────────────────────────── */
@@ -200,9 +180,11 @@
     cursor: pointer;
 }
 
-/* Chevron sits right of project-row, no auto margin needed */
+/* Pinned to the top-right corner of card-top in both states (design.md §4):
+   pillsRow's flex:1 provides this spacer only while collapsed (it relocates
+   out of card-top on expand), so the chevron pushes itself right instead. */
 .logbook-chevron {
-    margin-left: 0;
+    margin-left: auto;
     display: flex;
     align-items: center;
     color: var(--text-faint);
@@ -224,11 +206,6 @@
     margin-left: 6px;
 }
 
-/* Hide preview when card is open */
-.logbook-card.is-expanded .logbook-card-preview-wrap {
-    display: none;
-}
-
 /* Grid-height trick: animates height 0 → auto smoothly */
 .logbook-card-expand {
     display: grid;
@@ -248,45 +225,70 @@
     margin: 10px 0 12px;
 }
 
-.logbook-expanded-body {
-    font-size: 13.5px;
-    line-height: 1.6;
-    color: var(--text-normal);
-    max-height: 420px;
-    overflow-y: auto;
-    padding-right: 4px;
-}
-/* Tame Obsidian's default markdown margins inside our card */
-.logbook-expanded-body > :first-child {
-    margin-top: 0;
-}
-.logbook-expanded-body > :last-child {
-    margin-bottom: 0;
-}
-.logbook-expanded-body p {
-    margin: 0.4em 0;
-}
-.logbook-expanded-body h1,
-.logbook-expanded-body h2,
-.logbook-expanded-body h3 {
-    margin: 0.8em 0 0.3em;
-}
-
-.logbook-no-body {
-    font-style: italic;
-    color: var(--text-faint);
-}
-
-/* ── Project row (inline in card-top) ────────────────────────────────────── */
-
-/* Flex spacer between badge and chevron */
-.logbook-project-row {
-    flex: 1;
+/* ── Pills row (filterable-attribute pill + project/team pills) ─────────── */
+/* Lives inline in card-top while collapsed (flex spacer between badge and
+   chevron) and is relocated into the expanded field block by card.ts — same
+   element, no extra rule needed for that context since it's no longer a flex
+   child of card-top there. */
+.logbook-pills-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px;
     min-width: 0;
+}
+.logbook-card-top > .logbook-pills-row {
+    flex: 1;
+}
+.logbook-card-expand-inner > .logbook-pills-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+/* Each pill type (filter-attribute / projects / teams) is one "line". While
+   collapsed it has no box of its own — display:contents flattens it into the
+   flowing top-row layout, label hidden, identical to before this existed.
+   While expanded it becomes its own row with the label to the left, mirroring
+   .logbook-field-row below it. */
+.logbook-pill-line {
+    display: contents;
+}
+.logbook-pill-line-label {
+    display: none;
+}
+.logbook-card-expand-inner .logbook-pill-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.logbook-card-expand-inner .logbook-pill-line-label {
+    display: inline-block;
+    font-size: 11px;
+    color: var(--text-faint);
+    width: 78px;
+    flex-shrink: 0;
+}
+
+.logbook-pill-icon {
+    display: inline-flex;
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+}
+.logbook-pill-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.logbook-project-row,
+.logbook-team-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
 }
 
 .logbook-project-chip {
@@ -299,10 +301,10 @@
     white-space: nowrap;
     flex-shrink: 0;
 }
-.logbook-project-chip > span:first-child {
+.logbook-project-chip .logbook-pill-label {
     cursor: pointer;
 }
-.logbook-project-chip > span:first-child:hover {
+.logbook-project-chip .logbook-pill-label:hover {
     text-decoration: underline;
 }
 
@@ -339,26 +341,53 @@
     display: none;
 }
 /* Tighten chip padding when × is hidden */
-.logbook-card:not(.is-expanded) .logbook-project-chip {
+.logbook-card:not(.is-expanded) .logbook-project-chip,
+.logbook-card:not(.is-expanded) .logbook-team-chip {
     padding-right: 9px;
 }
 
-/* Add-project input — hidden when card is collapsed */
+/* "+" add affordance and the input it reveals — both hidden when collapsed. */
+.logbook-card:not(.is-expanded) .logbook-picker-add-btn,
 .logbook-card:not(.is-expanded) .logbook-picker-input-wrap {
+    display: none !important;
+}
+
+.logbook-picker-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1px dashed var(--background-modifier-border);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease;
+}
+.logbook-picker-add-btn svg {
+    width: 11px;
+    height: 11px;
+}
+.logbook-picker-add-btn:hover {
+    border-color: var(--interactive-accent);
+    color: var(--interactive-accent);
+}
+.logbook-picker-add-btn.is-hidden {
     display: none;
 }
 
 .logbook-picker-input-wrap {
     position: relative;
-    display: inline-flex;
+    display: none;
     border-radius: 999px;
-    border: 1px dashed var(--background-modifier-border);
-    transition: border-color 0.12s ease, background-color 0.12s ease;
-}
-.logbook-picker-input-wrap:has(.logbook-picker-input:focus) {
-    border-color: var(--interactive-accent);
-    border-style: solid;
+    border: 1px solid var(--interactive-accent);
     background: var(--background-modifier-hover);
+}
+.logbook-picker-input-wrap.is-open {
+    display: inline-flex;
 }
 
 .logbook-picker-input {
@@ -367,7 +396,7 @@
     color: var(--text-normal);
     font-size: 11px;
     outline: none;
-    width: 72px;
+    width: 88px;
     padding: 2px 9px;
 }
 .logbook-picker-input::placeholder {
@@ -403,44 +432,17 @@
 .logbook-expand-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     margin-top: 12px;
     padding-top: 10px;
     border-top: 1px solid var(--background-modifier-border);
-    gap: 8px;
-}
-.logbook-expand-footer .logbook-tags {
-    margin-top: 0;
 }
 
-.logbook-open-btn {
-    flex-shrink: 0;
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    background: transparent;
-    color: var(--interactive-accent);
-    border: 0.5px solid var(--interactive-accent);
-    border-radius: 8px;
-    padding: 6px 13px;
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    transition:
-        background 0.12s,
-        border-color 0.12s,
-        transform 0.1s;
+/* No body preview while expanded — expanding opens the real note in
+   Obsidian's editor instead (design.md §4, §6). */
+.logbook-card.is-expanded .logbook-card-preview-wrap {
+    display: none;
 }
 
-.logbook-open-btn:hover {
-    background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
-}
-
-.logbook-open-btn:active {
-    transform: scale(0.97);
-}
 /* ── Dock ────────────────────────────────────────────────────────────────── */
 
 .logbook-dock {
@@ -567,9 +569,11 @@
     font-style: italic;
 }
 
-/* ── Status pill ─────────────────────────────────────────────────────────── */
-
-.logbook-status-pill {
+/* ── Filterable-attribute pill (status / subtype) ───────────────────────── */
+/* Shared base for the type's filterable-property pill (design.md §2, §4).
+   Always clickable: status filters when collapsed, cycles when expanded;
+   subtype always filters, never edits — see renderFilterAttrPill in card.ts. */
+.logbook-filter-attr-pill {
     font-size: 10.5px;
     font-weight: 600;
     text-transform: capitalize;
@@ -577,9 +581,13 @@
     background: var(--background-modifier-hover);
     color: var(--text-muted);
     flex-shrink: 0;
-    cursor: default;
+    cursor: pointer;
 }
-/* Color-code by status so the pill's meaning reads at a glance. */
+.logbook-filter-attr-pill:hover {
+    filter: brightness(1.12);
+}
+
+/* Color-code task/design status by value so its meaning reads at a glance. */
 .logbook-status-pill.is-done,
 .logbook-status-pill.is-decided {
     color: var(--color-green, var(--text-muted));
@@ -595,11 +603,12 @@
     color: var(--color-yellow, var(--text-muted));
     background: color-mix(in srgb, var(--color-yellow, var(--text-muted)) 16%, transparent);
 }
-.logbook-status-pill.is-editable {
-    cursor: pointer;
-}
-.logbook-status-pill.is-editable:hover {
-    filter: brightness(1.12);
+
+/* Meeting subtype: tie to the card's own type color rather than a semantic
+   status color, since standalone/recurring isn't a progression like status. */
+.logbook-subtype-pill.is-recurring {
+    color: var(--card-type-color, var(--text-muted));
+    background: color-mix(in srgb, var(--card-type-color, var(--text-muted)) 16%, transparent);
 }
 
 .logbook-card.is-done .logbook-title {
@@ -698,24 +707,9 @@
     border-bottom-color: var(--interactive-accent);
 }
 
-/* ── Team / tag pickers (expanded footer area) ──────────────────────────── */
-
-.logbook-pickers-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 4px;
-}
-.logbook-team-row,
-.logbook-tag-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
-}
+/* ── Team / tag chips (attendee/stack pickers, expanded footer area) ────── */
 
 .logbook-team-chip,
-.logbook-tag-chip,
 .logbook-attendee-chip,
 .logbook-stack-chip {
     gap: 4px;
@@ -733,6 +727,12 @@
     color: var(--color-purple, var(--text-muted));
     background: color-mix(in srgb, var(--color-purple, var(--text-muted)) 14%, transparent);
 }
+.logbook-team-chip .logbook-pill-label {
+    cursor: pointer;
+}
+.logbook-team-chip .logbook-pill-label:hover {
+    text-decoration: underline;
+}
 /* Attendees/stack only ever render on meeting/knowledge cards respectively,
    so tying them to --card-type-color keeps every pill on a card visually
    related to that note's own badge color. */
@@ -742,25 +742,47 @@
     background: color-mix(in srgb, var(--card-type-color, var(--text-muted)) 14%, transparent);
 }
 
-/* ── Footer: hint + new-task button ─────────────────────────────────────── */
+/* ── Footer: hint ────────────────────────────────────────────────────────── */
 
 .logbook-kbd-hint {
     font-size: 11px;
     color: var(--text-faint);
     margin-right: auto;
 }
-.logbook-new-task-btn {
+
+/* Trash button, pinned to the bottom-right of the footer by .logbook-kbd-hint's
+   margin-right: auto above. Two-click confirm (design.md §4): .is-armed is the
+   "click again to delete" state. */
+.logbook-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
     flex-shrink: 0;
-    cursor: pointer;
+    padding: 0;
+    border: none;
+    border-radius: 5px;
     background: transparent;
-    color: var(--text-muted);
-    border: 0.5px solid var(--background-modifier-border);
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 12.5px;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: background-color 0.12s ease, color 0.12s ease;
 }
-.logbook-new-task-btn:hover {
+.logbook-delete-btn svg {
+    width: 14px;
+    height: 14px;
+}
+.logbook-delete-btn:hover {
     background: var(--background-modifier-hover);
+    color: var(--text-error);
+}
+.logbook-delete-btn.is-armed {
+    background: var(--text-error);
+    color: var(--text-on-accent);
+}
+.logbook-delete-btn.is-armed:hover {
+    background: var(--text-error);
+    color: var(--text-on-accent);
 }
 
 /* ── Filter chips (in the dock) ─────────────────────────────────────────── */
@@ -833,12 +855,11 @@
 /* ── Collapse mode ───────────────────────────────────────────────────────── */
 
 .logbook-view.is-collapse-mode .logbook-card-preview-wrap,
-.logbook-view.is-collapse-mode .logbook-project-row,
+.logbook-view.is-collapse-mode .logbook-pills-row,
 .logbook-view.is-collapse-mode .logbook-time,
 .logbook-view.is-collapse-mode .logbook-occurrence-info,
 .logbook-view.is-collapse-mode .logbook-question,
-.logbook-view.is-collapse-mode .logbook-chevron,
-.logbook-view.is-collapse-mode .logbook-status-pill {
+.logbook-view.is-collapse-mode .logbook-chevron {
     display: none;
 }
 .logbook-view.is-collapse-mode .logbook-card {

@@ -10,6 +10,16 @@ export default class LogbookPlugin extends Plugin {
     this.registerView(VIEW_TYPE_LOGBOOK, (leaf) => new LogbookView(leaf, this.settings));
     this.addRibbonIcon("book-open", "Open Logbook", () => this.activateView());
     this.addCommand({ id: "open-logbook", name: "Open Logbook", callback: () => this.activateView() });
+    this.addCommand({
+      id: "close-logbook-card",
+      name: "Close and save expanded Logbook card",
+      hotkeys: [{ modifiers: ["Mod"], key: "Enter" }],
+      callback: () => {
+        for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_LOGBOOK)) {
+          if (leaf.view instanceof LogbookView) leaf.view.closeActiveCard();
+        }
+      },
+    });
     this.addSettingTab(new LogbookSettingTab(this.app, this));
   }
 

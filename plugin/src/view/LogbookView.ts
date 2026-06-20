@@ -1,9 +1,9 @@
-import { Component, ItemView, MarkdownView, TFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownView, TFile, WorkspaceLeaf } from "obsidian";
 import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
-import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, activityTimestamp } from "../types";
+import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_SUBTYPES, activityTimestamp } from "../types";
 import { FilterState, applyFilters, emptyFilters, hasActiveFilters } from "../filters";
-import { renderFeed } from "./feed";
+import { renderFeed, CardCache } from "./feed";
 import { CardContext } from "./card";
 import { Dock, RecurringMeetingRef } from "./dock";
 
@@ -22,10 +22,12 @@ export class LogbookView extends ItemView {
   private loadingMore = false;
 
   private expandedPath: string | null = null;
+  private frozenTimestamp: number | null = null;
+  private activeCloseHandler: (() => void | Promise<void>) | null = null;
+  private cardCache: CardCache = new Map();
   private pendingDivider: string | undefined;
   private pendingNotePath: string | undefined;
 
-  private bodyComponents = new Map<string, Component>();
   private dock!: Dock;
 
   constructor(leaf: WorkspaceLeaf, private settings: LogbookSettings) {
@@ -95,10 +97,6 @@ export class LogbookView extends ItemView {
     }, 80);
   }
 
-  async onClose() {
-    this.unloadAllBodyComponents();
-  }
-
   private maybeRefresh() {
     if (this.store.isAnySuppressed()) return;
     void this.refresh();
@@ -110,14 +108,51 @@ export class LogbookView extends ItemView {
     this.renderDisplay();
   }
 
+  /** Esc on an expanded card (design.md §4): nothing was written to disk while
+   *  editing, so discarding is just reloading disk-truth and forcing that one
+   *  card to rebuild from it — every other card's cache entry stays untouched. */
+  private async discardEdits(path: string) {
+    this.allNotes = await this.store.loadNotes();
+    this.cardCache.delete(path);
+    if (this.expandedPath === path) {
+      this.expandedPath = null;
+      this.frozenTimestamp = null;
+      this.activeCloseHandler = null;
+    }
+    if (this.pendingNotePath === path) this.pendingNotePath = undefined;
+    this.renderDisplay();
+  }
+
+  /** The expanded card's trash button (design.md §4) — soft-deletes via the store,
+   *  discarding any staged edits outright. The card's own removal from the feed is
+   *  driven by the vault "delete" event (registered in onOpen) like any other live
+   *  refresh, not handled specially here. */
+  private async deleteNote(path: string) {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) return;
+    if (this.expandedPath === path) {
+      this.expandedPath = null;
+      this.frozenTimestamp = null;
+      this.activeCloseHandler = null;
+    }
+    if (this.pendingNotePath === path) this.pendingNotePath = undefined;
+    this.cardCache.delete(path);
+    await this.store.deleteNote(file);
+  }
+
+  /** Backing the global `Mod+Enter` command (main.ts) — closing a card moves focus
+   *  into the opened note's editor, so the shortcut can't be a card-scoped listener. */
+  closeActiveCard() {
+    if (this.activeCloseHandler) void this.activeCloseHandler();
+  }
+
   private addFilterValue(key: "projects" | "teams", value: string) {
     if (!this.filters[key].includes(value)) this.filters[key] = [...this.filters[key], value];
     this.afterFilterChange();
   }
 
-  private removeFilterChip(kind: "tag" | "project" | "team" | "type" | "typeAttr", value?: string) {
-    if (kind === "tag") this.filters.tags = this.filters.tags.filter((v) => v !== value);
-    else if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
+  private removeFilterChip(kind: "project" | "team" | "type" | "typeAttr", value?: string) {
+    if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
     else if (kind === "team") this.filters.teams = this.filters.teams.filter((v) => v !== value);
     else if (kind === "type") {
       this.filters.type = null;
@@ -135,16 +170,11 @@ export class LogbookView extends ItemView {
     return [...new Set(this.allNotes.flatMap(pick))].sort();
   }
 
-  /** Values for a type's filterAttr (design.md §12 /type two-step flow): fixed enums for task/design, observed values for meeting/knowledge. */
+  /** Values for a type's filterAttr (design.md §12 /type two-step flow): all three are closed enums. */
   private typeAttrValues(type: NoteType): string[] {
     if (type === "task") return TASK_STATUSES;
     if (type === "design") return DESIGN_STATUSES;
-    if (type === "meeting") {
-      return this.collectPool((n) => (n.fm.type === "meeting" && n.fm.theme ? [n.fm.theme] : []));
-    }
-    if (type === "knowledge") {
-      return this.collectPool((n) => (n.fm.type === "knowledge" ? n.fm.techStack : []));
-    }
+    if (type === "meeting") return MEETING_SUBTYPES;
     return [];
   }
 
@@ -167,54 +197,61 @@ export class LogbookView extends ItemView {
     return this.allNotes.some((n) => activityTimestamp(n) < cutoff);
   }
 
-  private renderDisplay() {
-    const notes = this.windowedNotes().sort((a, b) => activityTimestamp(a) - activityTimestamp(b));
+  /** Pins the expanded card's sort position so a frontmatter edit (e.g. a status pill click)
+   *  can't move the card the user is actively looking at out from under them. */
+  private sortKey(n: LogNote): number {
+    if (this.expandedPath === n.file.path && this.frozenTimestamp !== null) return this.frozenTimestamp;
+    return activityTimestamp(n);
+  }
 
-    this.unloadAllBodyComponents();
+  private renderDisplay() {
+    const notes = this.windowedNotes().sort((a, b) => this.sortKey(a) - this.sortKey(b));
 
     const ctx: CardContext = {
       app: this.app,
       store: this.store,
-      hostComponent: this,
-      registerBodyComponent: (path, comp) => {
-        const prev = this.bodyComponents.get(path);
-        if (prev) prev.unload();
-        this.bodyComponents.set(path, comp);
-      },
-      unregisterBodyComponent: (path) => {
-        this.bodyComponents.get(path)?.unload();
-        this.bodyComponents.delete(path);
-      },
       isExpanded: (path) => this.expandedPath === path,
-      expand: (path) => {
-        this.feedEl
-          .querySelectorAll(".logbook-card.is-expanded")
-          .forEach((el) => el.classList.remove("is-expanded"));
+      expand: (path, onForceClose) => {
+        const prevClose = this.activeCloseHandler;
+        this.activeCloseHandler = onForceClose;
         this.expandedPath = path;
+        const note = this.allNotes.find((n) => n.file.path === path);
+        this.frozenTimestamp = note ? activityTimestamp(note) : null;
+        // Run the previously-expanded card's own close handler (commit + collapse-UI)
+        // instead of stripping .is-expanded directly, so its staged edits get saved
+        // and its pillsRow node isn't left stranded in the expanded DOM position.
+        if (prevClose) void prevClose();
+      },
+      // For a card that's already expanded when it first renders (e.g. right after
+      // creation, where expandedPath is set directly rather than via expand() above)
+      // — registers its close handler without disturbing expandedPath/frozenTimestamp
+      // or force-closing anything, so Mod+Enter and cross-card switches still save it.
+      registerCloseHandler: (path, onForceClose) => {
+        if (this.expandedPath === path) this.activeCloseHandler = onForceClose;
       },
       collapse: (path) => {
-        if (this.expandedPath === path) this.expandedPath = null;
+        if (this.expandedPath === path) {
+          this.expandedPath = null;
+          this.frozenTimestamp = null;
+          this.activeCloseHandler = null;
+        }
         if (this.pendingNotePath === path) this.pendingNotePath = undefined;
       },
+      discardEdits: (path) => void this.discardEdits(path),
+      deleteNote: (path) => void this.deleteNote(path),
       pools: {
         projects: () => this.collectPool((n) => n.fm.projects),
         teams: () => this.collectPool((n) => n.fm.teams),
-        tags: () => this.collectPool((n) => n.fm.tags),
         templates: () => this.templateTitles,
       },
       searchQuery: this.filters.query,
-      onFilterTag: (tag) => {
-        if (!this.filters.tags.includes(tag)) this.filters.tags = [...this.filters.tags, tag];
-        this.afterFilterChange();
-      },
       onFilterProject: (p) => this.addFilterValue("projects", p),
       onFilterTeam: (t) => this.addFilterValue("teams", t),
-      onFilterType: (type) => {
+      onFilterType: (type, attr) => {
         this.filters.type = type;
-        this.filters.typeAttr = null;
+        this.filters.typeAttr = attr ?? null;
         this.afterFilterChange();
       },
-      onCreateTaskFromNote: (note) => void this.createTaskFromNote(note),
     };
 
     renderFeed(
@@ -227,8 +264,10 @@ export class LogbookView extends ItemView {
         onLoadMore: () => void this.loadMoreHistory(),
         pendingDivider: this.pendingDivider,
         pendingNotePath: this.pendingNotePath,
+        activityOf: (n) => this.sortKey(n),
       },
-      ctx
+      ctx,
+      this.cardCache
     );
   }
 
@@ -241,16 +280,17 @@ export class LogbookView extends ItemView {
     this.renderDisplay();
   }
 
-  private unloadAllBodyComponents() {
-    for (const comp of this.bodyComponents.values()) comp.unload();
-    this.bodyComponents.clear();
-  }
-
   private async createAndShow(
     type: NoteType,
     titleOrQuestion: string,
     opts?: { done?: boolean; recurring?: boolean }
   ) {
+    // Mirrors what ctx.expand() does when switching between two existing cards
+    // (commit + collapse the previously-open one) — createAndShow sets
+    // expandedPath directly rather than going through ctx.expand(), so without
+    // this the previously-open card was left expanded with its edits unsaved.
+    if (this.activeCloseHandler) await this.activeCloseHandler();
+
     const file = opts?.done
       ? await this.store.createDoneTask(titleOrQuestion)
       : opts?.recurring
@@ -261,14 +301,9 @@ export class LogbookView extends ItemView {
     this.pendingDivider = `Writing a ${NOTE_TYPES[type].label.toLowerCase()}`;
     this.pendingNotePath = file.path;
     await this.refresh();
-  }
-
-  private async createTaskFromNote(source: LogNote) {
-    const file = await this.store.createTaskFromNote(source);
-    this.expandedPath = file.path;
-    this.pendingDivider = "Writing a task";
-    this.pendingNotePath = file.path;
-    await this.refresh();
+    // Also bypassed by not going through ctx.expand(): opening the new note in
+    // Obsidian's own editor, same as expanding any other card does.
+    await this.app.workspace.openLinkText(file.path, "", false);
   }
 
   private async handleOccurrence(meeting: RecurringMeetingRef) {

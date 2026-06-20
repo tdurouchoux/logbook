@@ -17,7 +17,7 @@ export interface DockCallbacks {
   onFilterType(type: NoteType, attr?: { key: string; value: string }): void;
   onClearFilters(): void;
   onOccurrence(meeting: RecurringMeetingRef): void;
-  onRemoveFilterChip(kind: "tag" | "project" | "team" | "type" | "typeAttr", value?: string): void;
+  onRemoveFilterChip(kind: "project" | "team" | "type" | "typeAttr", value?: string): void;
   getAllProjects(): string[];
   getAllTeams(): string[];
   getTypeAttrValues(type: NoteType): string[];
@@ -69,9 +69,6 @@ export class Dock {
   renderChips() {
     this.chipsEl.empty();
     const f = this.cb.getFilters();
-    for (const tag of f.tags) {
-      this.addChip(`#${tag}`, () => this.cb.onRemoveFilterChip("tag", tag));
-    }
     for (const p of f.projects) {
       this.addChip(p, () => this.cb.onRemoveFilterChip("project", p));
     }
@@ -349,10 +346,6 @@ export class Dock {
 
   private removeMostRecentFilter(): boolean {
     const f = this.cb.getFilters();
-    if (f.tags.length) {
-      this.cb.onRemoveFilterChip("tag", f.tags[f.tags.length - 1]);
-      return true;
-    }
     if (f.projects.length) {
       this.cb.onRemoveFilterChip("project", f.projects[f.projects.length - 1]);
       return true;
