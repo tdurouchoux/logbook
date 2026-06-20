@@ -171,21 +171,16 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
 
-  const openBtn = expandFooter.createEl("button", { cls: "logbook-open-btn", text: "Open note →" });
-  openBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    void ctx.app.workspace.openLinkText(note.file.path, "", false);
-  });
-
   // ── Expand / collapse toggle ────────────────────────────────────────────
-  // The card never renders the body — only the same preview shown collapsed
-  // (design.md §4, §6) — so expanding/collapsing is just a class toggle, plus
-  // relocating pillsRow between the top row and the expanded field block.
+  // The card never renders the body inline — expanding opens the real note in
+  // Obsidian's editor instead (design.md §4, §6), and the body preview (shown
+  // only while collapsed) is hidden via CSS on .is-expanded.
   const expand = () => {
     ctx.expand(note.file.path);
     card.addClass("is-expanded");
     expandInner.insertBefore(pillsRow, typeFieldsEl);
     titleInput.focus();
+    void ctx.app.workspace.openLinkText(note.file.path, "", false);
   };
   const collapse = () => {
     ctx.collapse(note.file.path);

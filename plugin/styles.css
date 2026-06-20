@@ -376,41 +376,17 @@
 .logbook-expand-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     margin-top: 12px;
     padding-top: 10px;
     border-top: 1px solid var(--background-modifier-border);
-    gap: 8px;
 }
 
-.logbook-open-btn {
-    flex-shrink: 0;
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    background: transparent;
-    color: var(--interactive-accent);
-    border: 0.5px solid var(--interactive-accent);
-    border-radius: 8px;
-    padding: 6px 13px;
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    transition:
-        background 0.12s,
-        border-color 0.12s,
-        transform 0.1s;
+/* No body preview while expanded — expanding opens the real note in
+   Obsidian's editor instead (design.md §4, §6). */
+.logbook-card.is-expanded .logbook-card-preview-wrap {
+    display: none;
 }
 
-.logbook-open-btn:hover {
-    background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
-}
-
-.logbook-open-btn:active {
-    transform: scale(0.97);
-}
 /* ── Dock ────────────────────────────────────────────────────────────────── */
 
 .logbook-dock {
