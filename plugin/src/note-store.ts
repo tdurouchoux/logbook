@@ -65,10 +65,7 @@ export class NoteStore {
       .catch(() => undefined)
       .then(async () => {
         this.suppress(file.path);
-        await this.app.fileManager.processFrontMatter(file, (fm) => {
-          mutator(fm);
-          fm.updatedAt = new Date().toISOString();
-        });
+        await this.app.fileManager.processFrontMatter(file, mutator);
       });
     this.writeQueues.set(file.path, next);
     return next;
@@ -122,11 +119,9 @@ export class NoteStore {
       `id: ${generateId()}`,
       `type: ${type}`,
       `title: "${escapeYamlString(title)}"`,
-      "tags: []",
       "projects: []",
       "teams: []",
       `createdAt: ${now}`,
-      `updatedAt: ${now}`,
     ];
 
     if (type === "task") {
@@ -226,20 +221,6 @@ export class NoteStore {
     await this.app.vault.process(file, (c) => scaffoldBody(c, headings));
   }
 
-  /** design.md §4 "New task from this note" — pre-filled task linking back to its source. */
-  async createTaskFromNote(source: LogNote): Promise<TFile> {
-    const file = await this.createNote("task", `Follow up: ${source.fm.title}`);
-    const link = this.app.fileManager.generateMarkdownLink(source.file, file.path);
-    await this.app.vault.process(file, (content) => appendBodyLine(content, `From ${link}`));
-    await this.updateFrontmatter(file, (fm) => {
-      fm.projects = source.fm.projects;
-      fm.teams = source.fm.teams;
-      fm.tags = source.fm.tags;
-      fm.sourceNoteId = source.fm.id;
-    });
-    return file;
-  }
-
   async renameTitle(file: TFile, newTitle: string): Promise<void> {
     const slug = slugify(newTitle);
     const newPath = normalizePath(`${file.parent?.path ?? this.folder}/${slug}.md`);
@@ -270,11 +251,9 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
     id: typeof raw.id === "string" ? raw.id : file.path,
     type,
     title: typeof raw.title === "string" ? raw.title : file.basename,
-    tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
     projects: Array.isArray(raw.projects) ? raw.projects.map(String) : [],
     teams: Array.isArray(raw.teams) ? raw.teams.map(String) : [],
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(file.stat.ctime).toISOString(),
-    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date(file.stat.mtime).toISOString(),
   };
 
   switch (type) {
@@ -283,7 +262,6 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
         ...base,
         type: "task",
         status: (raw.status as any) ?? "todo",
-        sourceNoteId: typeof raw.sourceNoteId === "string" ? raw.sourceNoteId : undefined,
       };
     case "meeting":
       return {
@@ -317,14 +295,6 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
 
 function escapeYamlString(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
-
-function appendBodyLine(content: string, line: string): string {
-  const end = content.indexOf("\n---\n");
-  const fmEnd = content.startsWith("---") && end >= 0 ? end + 5 : 0;
-  const head = content.slice(0, fmEnd);
-  const body = content.slice(fmEnd).replace(/\s*$/, "");
-  return head + (body ? body + "\n\n" : "") + line + "\n";
 }
 
 function insertOccurrenceHeading(content: string, isoDate: string, headingLines: string[] = []): string {

@@ -1,4 +1,4 @@
-import { Component, ItemView, MarkdownView, TFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownView, TFile, WorkspaceLeaf } from "obsidian";
 import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
 import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, activityTimestamp } from "../types";
@@ -25,7 +25,6 @@ export class LogbookView extends ItemView {
   private pendingDivider: string | undefined;
   private pendingNotePath: string | undefined;
 
-  private bodyComponents = new Map<string, Component>();
   private dock!: Dock;
 
   constructor(leaf: WorkspaceLeaf, private settings: LogbookSettings) {
@@ -95,10 +94,6 @@ export class LogbookView extends ItemView {
     }, 80);
   }
 
-  async onClose() {
-    this.unloadAllBodyComponents();
-  }
-
   private maybeRefresh() {
     if (this.store.isAnySuppressed()) return;
     void this.refresh();
@@ -115,9 +110,8 @@ export class LogbookView extends ItemView {
     this.afterFilterChange();
   }
 
-  private removeFilterChip(kind: "tag" | "project" | "team" | "type" | "typeAttr", value?: string) {
-    if (kind === "tag") this.filters.tags = this.filters.tags.filter((v) => v !== value);
-    else if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
+  private removeFilterChip(kind: "project" | "team" | "type" | "typeAttr", value?: string) {
+    if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
     else if (kind === "team") this.filters.teams = this.filters.teams.filter((v) => v !== value);
     else if (kind === "type") {
       this.filters.type = null;
@@ -170,21 +164,9 @@ export class LogbookView extends ItemView {
   private renderDisplay() {
     const notes = this.windowedNotes().sort((a, b) => activityTimestamp(a) - activityTimestamp(b));
 
-    this.unloadAllBodyComponents();
-
     const ctx: CardContext = {
       app: this.app,
       store: this.store,
-      hostComponent: this,
-      registerBodyComponent: (path, comp) => {
-        const prev = this.bodyComponents.get(path);
-        if (prev) prev.unload();
-        this.bodyComponents.set(path, comp);
-      },
-      unregisterBodyComponent: (path) => {
-        this.bodyComponents.get(path)?.unload();
-        this.bodyComponents.delete(path);
-      },
       isExpanded: (path) => this.expandedPath === path,
       expand: (path) => {
         this.feedEl
@@ -199,14 +181,9 @@ export class LogbookView extends ItemView {
       pools: {
         projects: () => this.collectPool((n) => n.fm.projects),
         teams: () => this.collectPool((n) => n.fm.teams),
-        tags: () => this.collectPool((n) => n.fm.tags),
         templates: () => this.templateTitles,
       },
       searchQuery: this.filters.query,
-      onFilterTag: (tag) => {
-        if (!this.filters.tags.includes(tag)) this.filters.tags = [...this.filters.tags, tag];
-        this.afterFilterChange();
-      },
       onFilterProject: (p) => this.addFilterValue("projects", p),
       onFilterTeam: (t) => this.addFilterValue("teams", t),
       onFilterType: (type) => {
@@ -214,7 +191,6 @@ export class LogbookView extends ItemView {
         this.filters.typeAttr = null;
         this.afterFilterChange();
       },
-      onCreateTaskFromNote: (note) => void this.createTaskFromNote(note),
     };
 
     renderFeed(
@@ -241,11 +217,6 @@ export class LogbookView extends ItemView {
     this.renderDisplay();
   }
 
-  private unloadAllBodyComponents() {
-    for (const comp of this.bodyComponents.values()) comp.unload();
-    this.bodyComponents.clear();
-  }
-
   private async createAndShow(
     type: NoteType,
     titleOrQuestion: string,
@@ -259,14 +230,6 @@ export class LogbookView extends ItemView {
 
     this.expandedPath = file.path;
     this.pendingDivider = `Writing a ${NOTE_TYPES[type].label.toLowerCase()}`;
-    this.pendingNotePath = file.path;
-    await this.refresh();
-  }
-
-  private async createTaskFromNote(source: LogNote) {
-    const file = await this.store.createTaskFromNote(source);
-    this.expandedPath = file.path;
-    this.pendingDivider = "Writing a task";
     this.pendingNotePath = file.path;
     await this.refresh();
   }

@@ -7,7 +7,6 @@ export interface TypeAttrFilter {
 
 export interface FilterState {
   query: string;
-  tags: string[];
   projects: string[];
   teams: string[];
   type: NoteType | null;
@@ -15,18 +14,16 @@ export interface FilterState {
 }
 
 export function emptyFilters(): FilterState {
-  return { query: "", tags: [], projects: [], teams: [], type: null, typeAttr: null };
+  return { query: "", projects: [], teams: [], type: null, typeAttr: null };
 }
 
 export function hasActiveFilters(f: FilterState): boolean {
-  return (
-    !!f.query || f.tags.length > 0 || f.projects.length > 0 || f.teams.length > 0 || !!f.type || !!f.typeAttr
-  );
+  return !!f.query || f.projects.length > 0 || f.teams.length > 0 || !!f.type || !!f.typeAttr;
 }
 
 function fieldsOf(note: LogNote): string[] {
   const fm: any = note.fm;
-  const fields = [fm.title, note.body, ...(fm.tags ?? []), ...(fm.projects ?? []), ...(fm.teams ?? [])];
+  const fields = [fm.title, note.body, ...(fm.projects ?? []), ...(fm.teams ?? [])];
   switch (fm.type) {
     case "task":
       fields.push(fm.status);
@@ -65,7 +62,6 @@ export function applyFilters(notes: LogNote[], filters: FilterState): LogNote[] 
   return notes.filter((n) => {
     if (filters.type && n.fm.type !== filters.type) return false;
     if (filters.typeAttr && !matchesTypeAttr(n, filters.typeAttr)) return false;
-    if (filters.tags.length && !filters.tags.every((t) => n.fm.tags.includes(t))) return false;
     if (filters.projects.length && !filters.projects.every((p) => n.fm.projects.includes(p))) return false;
     if (filters.teams.length && !filters.teams.every((t) => n.fm.teams.includes(t))) return false;
     if (!matchesQuery(n, filters.query)) return false;

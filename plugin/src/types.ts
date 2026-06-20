@@ -61,17 +61,14 @@ export interface CommonFrontmatter {
   id: string;
   type: NoteType;
   title: string;
-  tags: string[];
   projects: string[];
   teams: string[];
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface TaskFrontmatter extends CommonFrontmatter {
   type: "task";
   status: TaskStatus;
-  sourceNoteId?: string;
 }
 
 export interface MeetingFrontmatter extends CommonFrontmatter {
@@ -134,12 +131,12 @@ export function isDesign(n: LogNote): n is LogNote & { fm: DesignFrontmatter } {
   return n.fm.type === "design";
 }
 
-/** Sort key per design.md §3: updatedAt, except recurring meetings use latest occurrence. */
+/** Sort key per design.md §3: file.stat.mtime, except recurring meetings use latest occurrence. */
 export function activityTimestamp(n: LogNote): number {
   if (isMeeting(n) && n.fm.subtype === "recurring" && n.fm.occurrences?.length) {
     const latest = n.fm.occurrences[0];
     const t = new Date(latest).getTime();
     if (!Number.isNaN(t)) return t;
   }
-  return new Date(n.fm.updatedAt).getTime();
+  return n.file.stat.mtime;
 }

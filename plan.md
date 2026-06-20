@@ -4,14 +4,14 @@ Tracks the gap between `design.md` and the current prototype (`plugin/src/main.t
 
 **Current state:** Phases 0–10 are complete — modular file layout, the full data layer (write queue, refresh suppression + settle resync, stable ids), all six note types with their type-specific fields including meeting template scaffolding, full collapsed/expanded card behavior with a unified pill design system, feed grouping/pagination/empty-states, the full command bar (creation + filter/utility commands), and the filtering/search engine. Remaining: one in-Obsidian manual QA item in Phase 11 (verifying markdown rendering breadth — tables/callouts/checkboxes/code blocks against the active theme) that genuinely can't be done outside a live Obsidian vault — everything else has been implemented and verified via `tsc -noEmit` + `esbuild` after every change.
 
-**Design revision (2026-06-20):** `design.md` was revised on four points, which the implementation hasn't caught up to yet:
+**Design revision (2026-06-20):** `design.md` was revised on four points, now implemented in full as **Phase 12** (12.1–12.4; 12.5's live-vault QA item is still open):
 
 1. Expanded cards no longer render the full note body (no `MarkdownRenderer`/`Component` lifecycle in the feed at all) — only the same short plain-text preview shown collapsed. Full content is read/edited exclusively by opening the note in Obsidian's own editor.
 2. `updatedAt` is no longer a plugin-managed frontmatter field — the feed's sort key and each card's time pill now read `file.stat.mtime` directly, so body edits made outside the plugin (in Obsidian's native editor) reorder the feed too, not just plugin-driven frontmatter writes.
 3. The plugin's own tag system (picker, chips, tag-click-to-filter, tag filter axis, tag search field) is removed entirely. Tags are Obsidian's native feature (frontmatter `tags`, inline `#tags`, the tag pane) — the plugin doesn't touch them.
 4. The "New task from this note" button (and the `sourceNoteId` field it set) is removed entirely — no replacement, just gone.
 
-Several items already checked off below (tag chips/picker, body-render `Component` lifecycle, `updatedAt` bump logic, "New task from this note") implement the *old* design and are now superseded — they're annotated in place below and the concrete rollback/rework is tracked as **Phase 12**.
+Several items checked off in Phases 1, 3, 4, 5, 7, 8 below (tag chips/picker, body-render `Component` lifecycle, `updatedAt` bump logic, "New task from this note") implemented the *old* design and are annotated in place as superseded — **Phase 12** is the actual rework, now done.
 
 ---
 
@@ -132,45 +132,45 @@ Implements the four `design.md` changes described above. Each sub-section below 
 
 ### 12.1 Drop in-feed body rendering (§4, §6)
 
-- [ ] `plugin/src/view/card.ts`: remove the `MarkdownRenderer.render()` call and the body-render helper (around card.ts:204-230); the expanded card keeps showing the same preview element already used collapsed instead of swapping in a rendered body
-- [ ] `plugin/src/view/card.ts`: drop `registerBodyComponent`/`unregisterBodyComponent`/`hostComponent` from `CardContext` — no longer needed without a per-card rendered-body `Component`
-- [ ] `plugin/src/view/LogbookView.ts`: remove the `bodyComponents` map and `unloadAllBodyComponents()` (LogbookView.ts:28, :99, :173, :244-246) and the `registerBodyComponent`/`unregisterBodyComponent` wiring passed into the card context (LogbookView.ts:178-186)
-- [ ] `plugin/src/view/card.ts`: simplify expand/collapse so the chevron/expanded-fields toggle no longer depends on a lazy body-render step — expanding becomes synchronous (no `await` needed just to reveal the fields)
-- [ ] §6's `<mark>` highlighting only needs to target the one shared preview element now, not a separate collapsed-preview + expanded-body pair — confirm the highlighting helper isn't duplicated for both
+- [x] `plugin/src/view/card.ts`: removed the `MarkdownRenderer.render()` call and the body-render helper; the expanded card now keeps showing the same `logbook-preview` element already used collapsed (CSS rule hiding `.logbook-card-preview-wrap` when expanded was dropped too) instead of swapping in a rendered body
+- [x] `plugin/src/view/card.ts`: dropped `registerBodyComponent`/`unregisterBodyComponent`/`hostComponent` from `CardContext`
+- [x] `plugin/src/view/LogbookView.ts`: removed the `bodyComponents` map, `unloadAllBodyComponents()`, `onClose()` (had no other purpose), and the `registerBodyComponent`/`unregisterBodyComponent` wiring passed into the card context
+- [x] `plugin/src/view/card.ts`: expand/collapse simplified to a synchronous class toggle — no body render step at all
+- [x] `<mark>` highlighting still targets just the one shared preview element (it always did; no separate expanded-body highlighting existed to dedupe)
 
 ### 12.2 `updatedAt` → `file.stat.mtime` (§2, §3, §4, §15)
 
-- [ ] `plugin/src/note-store.ts`: stop writing `updatedAt: ${now}` in `createNote` (note-store.ts:129)
-- [ ] `plugin/src/note-store.ts`: stop bumping `fm.updatedAt` inside `updateFrontmatter`'s mutator (note-store.ts:70) — `processFrontMatter` writing the file already updates `file.stat.mtime` on its own
-- [ ] `plugin/src/types.ts`: drop `updatedAt: string` from `NoteFrontmatter` (types.ts:68); update the sort-key function (types.ts:137-144) to use `note.file.stat.mtime` instead of `new Date(n.fm.updatedAt).getTime()`, keeping the recurring-meeting latest-occurrence override unchanged
-- [ ] `plugin/src/note-store.ts`: drop the `updatedAt` normalization fallback in `normalizeFrontmatter` (note-store.ts:277) — field no longer exists
-- [ ] `plugin/src/view/card.ts`: change the time pill (card.ts:87) to render `relativeTime(new Date(note.file.stat.mtime))` instead of reading `note.fm.updatedAt`
-- [ ] No migration needed for existing notes that already have a stray `updatedAt` key on disk from the old behavior — it's simply never read or written again, and `processFrontMatter`'s YAML serialization will leave it as inert dead weight unless the user removes it by hand
+- [x] `plugin/src/note-store.ts`: stopped writing `updatedAt: ${now}` in `createNote`
+- [x] `plugin/src/note-store.ts`: stopped bumping `fm.updatedAt` inside `updateFrontmatter`'s mutator
+- [x] `plugin/src/types.ts`: dropped `updatedAt: string` from `NoteFrontmatter`; sort-key function (`activityTimestamp`) now reads `n.file.stat.mtime`, recurring-meeting latest-occurrence override unchanged
+- [x] `plugin/src/note-store.ts`: dropped the `updatedAt` normalization fallback in `normalizeFrontmatter`
+- [x] `plugin/src/view/card.ts`: time pill now renders `relativeTime(new Date(note.file.stat.mtime))`
+- [x] No migration needed for existing notes with a stray `updatedAt` key on disk — confirmed inert, nothing reads/writes it anymore
 
 ### 12.3 Remove the plugin's tag system (§8, §9)
 
-- [ ] `plugin/src/note-store.ts`: stop writing `"tags: []"` in `createNote` (note-store.ts:125); drop the `tags` normalization in `normalizeFrontmatter` (note-store.ts:273)
-- [ ] `plugin/src/types.ts`: drop `tags: string[]` from `NoteFrontmatter` (types.ts:64)
-- [ ] `plugin/src/view/card.ts`: delete `renderTagChips` (card.ts:252) and its call site in the collapsed preview (card.ts:118-119); delete the tag-picker block in the expanded card (card.ts:170-181); drop `tags()` from the `pools` passed into `CardContext` (card.ts:28)
-- [ ] `plugin/src/filters.ts`: drop `tags: string[]` from `FilterState` and its default (filters.ts:10, :18); drop it from `hasActiveFilters` (filters.ts:23); drop `tags` from the search-field list in the free-text matcher (filters.ts:29); delete the tag predicate in the filter-apply function (filters.ts:68)
-- [ ] `plugin/src/view/dock.ts`: remove tag-chip rendering from the filter-chip row (dock.ts:72) and the tags-first branch of the `Backspace`-removes-filter priority chain (dock.ts:352-353), shifting it to project → team → type → type attribute
-- [ ] `plugin/src/view/LogbookView.ts`: remove the `"tag"` branch of `onRemoveFilterChip` (LogbookView.ts:119), the `tags` pool collector passed to the dock (LogbookView.ts:202), and the tag-click-to-filter handler (LogbookView.ts:207)
-- [ ] Leave `plugin/src/view/pickers.ts` itself alone — it's the generic chip+autocomplete component and still has two callers (projects, teams) after the tag picker call site is deleted from `card.ts`
-- [ ] Confirm `createNote` no longer needs a `tags` pool/value at all — if a user adds Obsidian-native tags to a logbook note afterward (via Properties panel or inline `#tag`), the plugin should just leave that frontmatter key untouched on every subsequent `processFrontMatter` write (this falls out for free from only mutating the specific keys each write already touches, never the whole object)
+- [x] `plugin/src/note-store.ts`: stopped writing `"tags: []"` in `createNote`; dropped the `tags` normalization in `normalizeFrontmatter`
+- [x] `plugin/src/types.ts`: dropped `tags: string[]` from `NoteFrontmatter`
+- [x] `plugin/src/view/card.ts`: deleted `renderTagChips` and its call site in the collapsed preview; deleted the tag-picker block in the expanded card; dropped `tags()` from the `pools` passed into `CardContext`
+- [x] `plugin/src/filters.ts`: dropped `tags: string[]` from `FilterState` and its default; dropped it from `hasActiveFilters`; dropped `tags` from the search-field list in the free-text matcher; deleted the tag predicate in the filter-apply function
+- [x] `plugin/src/view/dock.ts`: removed tag-chip rendering from the filter-chip row and the tags-first branch of the `Backspace`-removes-filter priority chain (now project → team → type → type attribute)
+- [x] `plugin/src/view/LogbookView.ts`: removed the `"tag"` branch of `removeFilterChip`/`onRemoveFilterChip` and the tag-click-to-filter handler (there was no separate tags pool collector passed to the dock — only `getAllProjects`/`getAllTeams` ever were)
+- [x] Left `plugin/src/view/pickers.ts` itself alone — still has two callers (projects, teams)
+- [x] `createNote` no longer touches a `tags` field at all; every `processFrontMatter` mutator only sets the specific keys it owns, so a user-added native `tags` property is left untouched on subsequent writes
 
 ### 12.4 Remove "New task from this note" (§4, §5.2)
 
-- [ ] `plugin/src/note-store.ts`: delete `createTaskFromNote()` entirely (note-store.ts:229-241)
-- [ ] `plugin/src/types.ts`: drop `sourceNoteId?: string` from `TaskFrontmatter` (types.ts:74)
-- [ ] `plugin/src/note-store.ts`: drop the `sourceNoteId` normalization in `normalizeFrontmatter` (note-store.ts:286)
-- [ ] `plugin/src/view/card.ts`: delete the "New task from this note" button block in the expanded footer (card.ts:187-196), including the `note.fm.type !== "task"` guard around it
-- [ ] `plugin/src/view/card.ts`: drop `onCreateTaskFromNote` from `CardContext`
-- [ ] `plugin/src/view/LogbookView.ts`: delete `createTaskFromNote()` (LogbookView.ts:266-270ish) and the `onCreateTaskFromNote` wiring passed into the card context (LogbookView.ts:217)
-- [ ] Check `plugin/styles.css` for a now-orphaned `.logbook-new-task-btn` rule and remove it
-- [ ] No migration needed for existing task notes that already carry a stray `sourceNoteId` from before — same as the `updatedAt` leftover-key case in 12.2, it's just inert once nothing reads or writes it
+- [x] `plugin/src/note-store.ts`: deleted `createTaskFromNote()` entirely, plus the now-orphaned `appendBodyLine()` helper it was the only caller of
+- [x] `plugin/src/types.ts`: dropped `sourceNoteId?: string` from `TaskFrontmatter`
+- [x] `plugin/src/note-store.ts`: dropped the `sourceNoteId` normalization in `normalizeFrontmatter`
+- [x] `plugin/src/view/card.ts`: deleted the "New task from this note" button block in the expanded footer, including its `note.fm.type !== "task"` guard
+- [x] `plugin/src/view/card.ts`: dropped `onCreateTaskFromNote` from `CardContext`
+- [x] `plugin/src/view/LogbookView.ts`: deleted `createTaskFromNote()` and its wiring into the card context
+- [x] Removed the now-orphaned `.logbook-new-task-btn` rule from `plugin/styles.css`
+- [x] No migration needed for existing task notes with a stray `sourceNoteId` — confirmed inert
 
 ### 12.5 Re-verification
 
-- [ ] Re-run the Phase 11 keyboard-shortcut audit against the trimmed §12 table (no tag input row)
-- [ ] Re-run the Phase 11 anti-feature pass against the two new bullets in §13 (no tag manager, no second body renderer)
-- [ ] Manual QA in a live vault: edit a logbook note's body directly in Obsidian's native editor (bypassing the plugin entirely) and confirm the note jumps to the bottom of the feed once the view refreshes — this is the actual behavior change `file.stat.mtime` is meant to deliver over the old `updatedAt`-only bump
+- [x] `tsc -noEmit -skipLibCheck` and `node esbuild.config.mjs production` both run clean against the trimmed source (ran after installing `devDependencies`, which weren't present in the working tree)
+- [x] Re-checked the Phase 11 keyboard-shortcut table and anti-feature pass against the new §12/§13 — no tag input row, no tag manager, no second body renderer; nothing else in the implementation regressed
+- [ ] Manual QA in a live vault: edit a logbook note's body directly in Obsidian's native editor (bypassing the plugin entirely) and confirm the note jumps to the bottom of the feed once the view refreshes — this still genuinely needs a live Obsidian vault and hasn't been done

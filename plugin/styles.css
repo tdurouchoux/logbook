@@ -119,13 +119,6 @@
     overflow: hidden;
 }
 
-.logbook-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 7px;
-}
-
 /* ── Pills — shared base for every chip/pill in the UI ──────────────────── */
 /* One consistent shape + interaction language (rounded, animated, tactile)
    so project/team/tag/attendee/stack/status/filter pills read as one family
@@ -143,19 +136,6 @@
 }
 .logbook-pill:active {
     transform: scale(0.94);
-}
-
-.logbook-tag {
-    font-size: 10.5px;
-    font-weight: 500;
-    color: var(--text-muted);
-    background: var(--background-modifier-hover);
-    padding: 2px 8px;
-    cursor: pointer;
-}
-.logbook-tag:hover {
-    background: var(--background-modifier-border-hover);
-    color: var(--text-normal);
 }
 
 /* ── Type badge ──────────────────────────────────────────────────────────── */
@@ -224,11 +204,6 @@
     margin-left: 6px;
 }
 
-/* Hide preview when card is open */
-.logbook-card.is-expanded .logbook-card-preview-wrap {
-    display: none;
-}
-
 /* Grid-height trick: animates height 0 → auto smoothly */
 .logbook-card-expand {
     display: grid;
@@ -246,35 +221,6 @@
     border: none;
     border-top: 1px solid var(--background-modifier-border);
     margin: 10px 0 12px;
-}
-
-.logbook-expanded-body {
-    font-size: 13.5px;
-    line-height: 1.6;
-    color: var(--text-normal);
-    max-height: 420px;
-    overflow-y: auto;
-    padding-right: 4px;
-}
-/* Tame Obsidian's default markdown margins inside our card */
-.logbook-expanded-body > :first-child {
-    margin-top: 0;
-}
-.logbook-expanded-body > :last-child {
-    margin-bottom: 0;
-}
-.logbook-expanded-body p {
-    margin: 0.4em 0;
-}
-.logbook-expanded-body h1,
-.logbook-expanded-body h2,
-.logbook-expanded-body h3 {
-    margin: 0.8em 0 0.3em;
-}
-
-.logbook-no-body {
-    font-style: italic;
-    color: var(--text-faint);
 }
 
 /* ── Project row (inline in card-top) ────────────────────────────────────── */
@@ -408,9 +354,6 @@
     padding-top: 10px;
     border-top: 1px solid var(--background-modifier-border);
     gap: 8px;
-}
-.logbook-expand-footer .logbook-tags {
-    margin-top: 0;
 }
 
 .logbook-open-btn {
@@ -706,8 +649,7 @@
     gap: 12px;
     margin-bottom: 4px;
 }
-.logbook-team-row,
-.logbook-tag-row {
+.logbook-team-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -715,7 +657,6 @@
 }
 
 .logbook-team-chip,
-.logbook-tag-chip,
 .logbook-attendee-chip,
 .logbook-stack-chip {
     gap: 4px;
@@ -742,25 +683,12 @@
     background: color-mix(in srgb, var(--card-type-color, var(--text-muted)) 14%, transparent);
 }
 
-/* ── Footer: hint + new-task button ─────────────────────────────────────── */
+/* ── Footer: hint ────────────────────────────────────────────────────────── */
 
 .logbook-kbd-hint {
     font-size: 11px;
     color: var(--text-faint);
     margin-right: auto;
-}
-.logbook-new-task-btn {
-    flex-shrink: 0;
-    cursor: pointer;
-    background: transparent;
-    color: var(--text-muted);
-    border: 0.5px solid var(--background-modifier-border);
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 12.5px;
-}
-.logbook-new-task-btn:hover {
-    background: var(--background-modifier-hover);
 }
 
 /* ── Filter chips (in the dock) ─────────────────────────────────────────── */

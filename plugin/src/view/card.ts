@@ -1,4 +1,4 @@
-import { App, Component, MarkdownRenderer } from "obsidian";
+import { App } from "obsidian";
 import {
   LogNote,
   NoteType,
@@ -19,19 +19,14 @@ import { renderPicker } from "./pickers";
 export interface CardContext {
   app: App;
   store: NoteStore;
-  hostComponent: Component;
-  registerBodyComponent(path: string, comp: Component): void;
-  unregisterBodyComponent(path: string): void;
   isExpanded(path: string): boolean;
   expand(path: string): void;
   collapse(path: string): void;
-  pools: { projects(): string[]; teams(): string[]; tags(): string[]; templates(): string[] };
+  pools: { projects(): string[]; teams(): string[]; templates(): string[] };
   searchQuery: string;
-  onFilterTag(tag: string): void;
   onFilterProject(p: string): void;
   onFilterTeam(t: string): void;
   onFilterType(type: NoteType): void;
-  onCreateTaskFromNote(note: LogNote): void;
 }
 
 export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
@@ -84,7 +79,7 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="6 9 12 15 18 9"/></svg>`;
 
-  top.createEl("span", { cls: "logbook-time", text: relativeTime(new Date(note.fm.updatedAt)) });
+  top.createEl("span", { cls: "logbook-time", text: relativeTime(new Date(note.file.stat.mtime)) });
 
   const titleRow = header.createDiv("logbook-title-row");
   if (isThoughts(note) && note.fm.question) {
@@ -115,8 +110,6 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     const preview = previewWrap.createEl("div", { cls: "logbook-preview" });
     preview.innerHTML = ctx.searchQuery ? highlight(plain, ctx.searchQuery) : escapeHtml(plain);
   }
-  const tagsRow = previewWrap.createDiv("logbook-tags");
-  renderTagChips(tagsRow, note.fm.tags, ctx);
 
   // ── Expanded section ──────────────────────────────────────────────────
   const expandWrap = card.createDiv("logbook-card-expand");
@@ -151,11 +144,6 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
   const typeFieldsEl = expandInner.createDiv("logbook-type-fields");
   renderTypeFields(typeFieldsEl, note, ctx, revertFns);
 
-  const bodyEl = expandInner.createDiv("logbook-expanded-body");
-  if (!note.body) {
-    bodyEl.createEl("p", { cls: "logbook-no-body", text: "No content yet." });
-  }
-
   const pickersRow = expandInner.createDiv("logbook-pickers-row");
   const teamWrap = pickersRow.createDiv("logbook-team-row");
   renderPicker(teamWrap, {
@@ -168,32 +156,9 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
       await ctx.store.updateFrontmatter(note.file, (fm) => (fm.teams = next));
     },
   });
-  const tagWrap = pickersRow.createDiv("logbook-tag-row");
-  renderPicker(tagWrap, {
-    values: note.fm.tags,
-    pool: ctx.pools.tags,
-    placeholder: "+ tag",
-    chipClass: "logbook-pill logbook-tag-chip",
-    prefix: "#",
-    onChange: async (next) => {
-      note.fm.tags = next;
-      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.tags = next));
-    },
-  });
 
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
-
-  if (note.fm.type !== "task") {
-    const taskBtn = expandFooter.createEl("button", {
-      cls: "logbook-new-task-btn",
-      text: "New task from this note",
-    });
-    taskBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      ctx.onCreateTaskFromNote(note);
-    });
-  }
 
   const openBtn = expandFooter.createEl("button", { cls: "logbook-open-btn", text: "Open note →" });
   openBtn.addEventListener("click", (e) => {
@@ -201,35 +166,17 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     void ctx.app.workspace.openLinkText(note.file.path, "", false);
   });
 
-  // ── Markdown render + Component lifecycle ──────────────────────────────
-  let rendered = false;
-  const renderBody = async () => {
-    if (rendered || !note.body) return;
-    rendered = true;
-    const comp = new Component();
-    comp.load();
-    ctx.registerBodyComponent(note.file.path, comp);
-    await MarkdownRenderer.render(ctx.app, note.body, bodyEl, note.file.path, comp);
-  };
-  if (isExpanded) void renderBody();
-
   // ── Expand / collapse toggle ────────────────────────────────────────────
+  // The card never renders the body — only the same preview shown collapsed
+  // (design.md §4, §6) — so expanding/collapsing is just a class toggle.
   const expand = () => {
     ctx.expand(note.file.path);
     card.addClass("is-expanded");
-    void renderBody();
     titleInput.focus();
   };
   const collapse = () => {
     ctx.collapse(note.file.path);
     card.removeClass("is-expanded");
-    // Drop the rendered body's Component (and its event listeners, e.g.
-    // hover-preview on internal links) now rather than waiting for the next
-    // full feed refresh — re-rendered fresh on the next expand.
-    ctx.unregisterBodyComponent(note.file.path);
-    bodyEl.empty();
-    if (!note.body) bodyEl.createEl("p", { cls: "logbook-no-body", text: "No content yet." });
-    rendered = false;
   };
 
   header.addEventListener("click", (e) => {
@@ -247,16 +194,6 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
       collapse();
     }
   });
-}
-
-function renderTagChips(container: HTMLElement, tags: string[], ctx: CardContext) {
-  for (const tag of tags) {
-    const chip = container.createEl("span", { cls: "logbook-pill logbook-tag", text: "#" + tag });
-    chip.addEventListener("click", (e) => {
-      e.stopPropagation();
-      ctx.onFilterTag(tag);
-    });
-  }
 }
 
 function renderBadge(parent: HTMLElement, type: NoteType): HTMLElement {
