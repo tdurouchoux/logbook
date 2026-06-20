@@ -23,6 +23,7 @@ export class LogbookView extends ItemView {
 
   private expandedPath: string | null = null;
   private frozenTimestamp: number | null = null;
+  private activeCloseHandler: (() => void | Promise<void>) | null = null;
   private cardCache: CardCache = new Map();
   private pendingDivider: string | undefined;
   private pendingNotePath: string | undefined;
@@ -107,6 +108,27 @@ export class LogbookView extends ItemView {
     this.renderDisplay();
   }
 
+  /** Esc on an expanded card (design.md §4): nothing was written to disk while
+   *  editing, so discarding is just reloading disk-truth and forcing that one
+   *  card to rebuild from it — every other card's cache entry stays untouched. */
+  private async discardEdits(path: string) {
+    this.allNotes = await this.store.loadNotes();
+    this.cardCache.delete(path);
+    if (this.expandedPath === path) {
+      this.expandedPath = null;
+      this.frozenTimestamp = null;
+      this.activeCloseHandler = null;
+    }
+    if (this.pendingNotePath === path) this.pendingNotePath = undefined;
+    this.renderDisplay();
+  }
+
+  /** Backing the global `Mod+Enter` command (main.ts) — closing a card moves focus
+   *  into the opened note's editor, so the shortcut can't be a card-scoped listener. */
+  closeActiveCard() {
+    if (this.activeCloseHandler) void this.activeCloseHandler();
+  }
+
   private addFilterValue(key: "projects" | "teams", value: string) {
     if (!this.filters[key].includes(value)) this.filters[key] = [...this.filters[key], value];
     this.afterFilterChange();
@@ -172,21 +194,26 @@ export class LogbookView extends ItemView {
       app: this.app,
       store: this.store,
       isExpanded: (path) => this.expandedPath === path,
-      expand: (path) => {
-        this.feedEl
-          .querySelectorAll(".logbook-card.is-expanded")
-          .forEach((el) => el.classList.remove("is-expanded"));
+      expand: (path, onForceClose) => {
+        const prevClose = this.activeCloseHandler;
+        this.activeCloseHandler = onForceClose;
         this.expandedPath = path;
         const note = this.allNotes.find((n) => n.file.path === path);
         this.frozenTimestamp = note ? activityTimestamp(note) : null;
+        // Run the previously-expanded card's own close handler (commit + collapse-UI)
+        // instead of stripping .is-expanded directly, so its staged edits get saved
+        // and its pillsRow node isn't left stranded in the expanded DOM position.
+        if (prevClose) void prevClose();
       },
       collapse: (path) => {
         if (this.expandedPath === path) {
           this.expandedPath = null;
           this.frozenTimestamp = null;
+          this.activeCloseHandler = null;
         }
         if (this.pendingNotePath === path) this.pendingNotePath = undefined;
       },
+      discardEdits: (path) => void this.discardEdits(path),
       pools: {
         projects: () => this.collectPool((n) => n.fm.projects),
         teams: () => this.collectPool((n) => n.fm.teams),

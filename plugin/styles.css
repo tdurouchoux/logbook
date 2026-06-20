@@ -180,9 +180,11 @@
     cursor: pointer;
 }
 
-/* Chevron sits right of project-row, no auto margin needed */
+/* Pinned to the top-right corner of card-top in both states (design.md §4):
+   pillsRow's flex:1 provides this spacer only while collapsed (it relocates
+   out of card-top on expand), so the chevron pushes itself right instead. */
 .logbook-chevron {
-    margin-left: 0;
+    margin-left: auto;
     display: flex;
     align-items: center;
     color: var(--text-faint);

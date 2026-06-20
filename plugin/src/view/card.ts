@@ -12,7 +12,7 @@ import {
   isDesign,
 } from "../types";
 import { NoteStore } from "../note-store";
-import { relativeTime, debounce } from "../utils";
+import { relativeTime } from "../utils";
 import { highlight } from "../filters";
 import { renderPicker } from "./pickers";
 
@@ -20,8 +20,9 @@ export interface CardContext {
   app: App;
   store: NoteStore;
   isExpanded(path: string): boolean;
-  expand(path: string): void;
+  expand(path: string, onForceClose: () => void | Promise<void>): void;
   collapse(path: string): void;
+  discardEdits(path: string): void;
   pools: { projects(): string[]; teams(): string[]; templates(): string[] };
   searchQuery: string;
   onFilterProject(p: string): void;
@@ -46,7 +47,12 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   if (isTask(note) && note.fm.status === "done") card.addClass("is-done");
   if (isTask(note) && note.fm.status === "suspended") card.addClass("is-suspended");
 
-  const revertFns: (() => void)[] = [];
+  // Nothing is written to disk while a field is being edited (design.md §4) — every
+  // handler below mutates `note.fm` + its own DOM immediately, then records what
+  // changed here. `commit()` flushes it all in one batch when the card closes.
+  const dirty = new Set<string>();
+  let titleDirty = false;
+  let templateDirty = false;
 
   // ── Collapsed header ──────────────────────────────────────────────────
   const header = card.createDiv("logbook-card-header");
@@ -67,7 +73,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
 
   if (typeInfo.filterAttr) {
     const filterLine = renderPillLine(pillsRow, typeInfo.filterAttr.label);
-    renderFilterAttrPill(filterLine, note, ctx, card);
+    renderFilterAttrPill(filterLine, note, ctx, card, dirty);
   }
 
   const projectLine = renderPillLine(pillsRow, "Projects");
@@ -78,9 +84,9 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     placeholder: "+ project",
     chipClass: "logbook-pill logbook-project-chip",
     icon: "briefcase",
-    onChange: async (next) => {
+    onChange: (next) => {
       note.fm.projects = next;
-      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.projects = next));
+      dirty.add("projects");
     },
   });
   // Clicking an existing project chip's label (not its × or the input) filters by it.
@@ -99,9 +105,9 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     placeholder: "+ team",
     chipClass: "logbook-pill logbook-team-chip",
     icon: "users",
-    onChange: async (next) => {
+    onChange: (next) => {
       note.fm.teams = next;
-      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.teams = next));
+      dirty.add("teams");
     },
   });
   // Clicking an existing team chip's label (not its × or the input) filters by it.
@@ -162,44 +168,64 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     attr: { type: "text", spellcheck: "false" },
   });
   titleInput.value = note.fm.title;
-  const saveTitle = debounce(async () => {
-    const val = titleInput.value.trim();
-    if (!val || val === note.fm.title) return;
-    note.fm.title = val;
-    await ctx.store.renameTitle(note.file, val);
-  }, 600);
   titleInput.addEventListener("input", () => {
     titleEl.textContent = titleInput.value;
-    saveTitle();
+    const val = titleInput.value.trim();
+    if (val) {
+      note.fm.title = val;
+      titleDirty = true;
+    }
   });
   titleInput.addEventListener("click", (e) => e.stopPropagation());
-  revertFns.push(() => {
-    titleInput.value = note.fm.title;
-    titleEl.textContent = note.fm.title;
-  });
 
   // Type-specific editable fields (status/subtype live in pillsRow, not here)
   const typeFieldsEl = expandInner.createDiv("logbook-type-fields");
-  renderTypeFields(typeFieldsEl, note, ctx, revertFns);
+  renderTypeFields(typeFieldsEl, note, ctx, dirty, () => (templateDirty = true));
 
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
+
+  // ── Commit / discard ────────────────────────────────────────────────────
+  /** Flushes every staged edit in as few writes as possible: a rename (title),
+   *  a template scaffold (meeting template), and one batched frontmatter write
+   *  for everything else (design.md §4). */
+  const commit = async () => {
+    if (titleDirty) {
+      titleDirty = false;
+      await ctx.store.renameTitle(note.file, note.fm.title);
+    }
+    if (templateDirty && isMeeting(note)) {
+      templateDirty = false;
+      await ctx.store.setMeetingTemplate(note.file, note.fm, note.fm.template ?? "");
+    }
+    if (dirty.size > 0) {
+      const keys = Array.from(dirty);
+      dirty.clear();
+      await ctx.store.updateFrontmatter(note.file, (raw) => {
+        for (const k of keys) raw[k] = (note.fm as unknown as Record<string, unknown>)[k];
+      });
+    }
+  };
 
   // ── Expand / collapse toggle ────────────────────────────────────────────
   // The card never renders the body inline — expanding opens the real note in
   // Obsidian's editor instead (design.md §4, §6), and the body preview (shown
   // only while collapsed) is hidden via CSS on .is-expanded.
+  const collapseUI = () => {
+    card.removeClass("is-expanded");
+    top.insertBefore(pillsRow, chevron);
+  };
+  const closeAndSave = async () => {
+    await commit();
+    ctx.collapse(note.file.path);
+    collapseUI();
+  };
   const expand = () => {
-    ctx.expand(note.file.path);
+    ctx.expand(note.file.path, closeAndSave);
     card.addClass("is-expanded");
     expandInner.insertBefore(pillsRow, typeFieldsEl);
     titleInput.focus();
     void ctx.app.workspace.openLinkText(note.file.path, "", false);
-  };
-  const collapse = () => {
-    ctx.collapse(note.file.path);
-    card.removeClass("is-expanded");
-    top.insertBefore(pillsRow, chevron);
   };
   // A card can be rendered already-expanded (e.g. right after creation) —
   // match pillsRow's location to that initial state.
@@ -207,17 +233,16 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
 
   header.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("input, button, .logbook-pill, .logbook-badge")) return;
-    card.hasClass("is-expanded") ? collapse() : expand();
+    card.hasClass("is-expanded") ? void closeAndSave() : expand();
   });
 
   card.addEventListener("keydown", (e) => {
-    if ((e.key === "Enter" && (e.metaKey || e.ctrlKey)) ) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      collapse();
+      void closeAndSave();
     } else if (e.key === "Escape") {
       e.preventDefault();
-      for (const revert of revertFns) revert();
-      collapse();
+      ctx.discardEdits(note.file.path);
     }
   });
 }
@@ -246,13 +271,19 @@ function renderPillLine(parent: HTMLElement, label: string): HTMLElement {
 
 /**
  * The type's filterable-property pill (design.md §2, §4): task/design's `status`
- * filters when collapsed but cycles-and-saves when expanded; meeting's `subtype`
- * always filters, in either state, and is never editable. Reused as a single DOM
- * node relocated between the collapsed top row and the expanded field block, so
- * its click behavior is read from `card`'s current `is-expanded` class at click
- * time rather than baked in at render time.
+ * filters when collapsed but cycles (and stages, design.md §4) when expanded;
+ * meeting's `subtype` always filters, in either state, and is never editable.
+ * Reused as a single DOM node relocated between the collapsed top row and the
+ * expanded field block, so its click behavior is read from `card`'s current
+ * `is-expanded` class at click time rather than baked in at render time.
  */
-function renderFilterAttrPill(parent: HTMLElement, note: LogNote, ctx: CardContext, card: HTMLElement) {
+function renderFilterAttrPill(
+  parent: HTMLElement,
+  note: LogNote,
+  ctx: CardContext,
+  card: HTMLElement,
+  dirty: Set<string>
+) {
   const typeInfo = NOTE_TYPES[note.fm.type];
   if (!typeInfo.filterAttr) return;
   const { key } = typeInfo.filterAttr;
@@ -277,7 +308,7 @@ function renderFilterAttrPill(parent: HTMLElement, note: LogNote, ctx: CardConte
       cls: `logbook-pill logbook-filter-attr-pill logbook-status-pill is-${status}`,
       text: status,
     });
-    pill.addEventListener("click", async (e) => {
+    pill.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!card.hasClass("is-expanded")) {
         ctx.onFilterType(note.fm.type, { key, value: status });
@@ -286,7 +317,7 @@ function renderFilterAttrPill(parent: HTMLElement, note: LogNote, ctx: CardConte
       const idx = (cycle as string[]).indexOf(status);
       status = cycle[(idx + 1) % cycle.length];
       (note.fm as any).status = status;
-      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.status = status));
+      dirty.add("status");
       pill.textContent = status;
       pill.className = `logbook-pill logbook-filter-attr-pill logbook-status-pill is-${status}`;
     });
@@ -297,7 +328,8 @@ function renderTypeFields(
   container: HTMLElement,
   note: LogNote,
   ctx: CardContext,
-  revertFns: (() => void)[]
+  dirty: Set<string>,
+  markTemplateDirty: () => void
 ) {
   if (isMeeting(note)) {
     const themeRow = container.createDiv("logbook-field-row");
@@ -307,14 +339,11 @@ function renderTypeFields(
       attr: { type: "text", placeholder: "theme…" },
     });
     themeInput.value = note.fm.theme ?? "";
-    const saveTheme = debounce(async () => {
-      const val = themeInput.value.trim();
-      note.fm.theme = val || undefined;
-      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.theme = val));
-    }, 600);
-    themeInput.addEventListener("input", saveTheme);
+    themeInput.addEventListener("input", () => {
+      note.fm.theme = themeInput.value.trim() || undefined;
+      dirty.add("theme");
+    });
     themeInput.addEventListener("click", (e) => e.stopPropagation());
-    revertFns.push(() => (themeInput.value = note.fm.theme ?? ""));
 
     const attendeesRow = container.createDiv("logbook-field-row");
     attendeesRow.createEl("label", { text: "Attendees" });
@@ -324,9 +353,9 @@ function renderTypeFields(
       pool: () => [],
       placeholder: "+ attendee",
       chipClass: "logbook-pill logbook-attendee-chip",
-      onChange: async (next) => {
+      onChange: (next) => {
         note.fm.attendees = next;
-        await ctx.store.updateFrontmatter(note.file, (fm) => (fm.attendees = next));
+        dirty.add("attendees");
       },
     });
 
@@ -340,14 +369,11 @@ function renderTypeFields(
     const datalist = templateRow.createEl("datalist", { attr: { id: templateListId } });
     for (const t of ctx.pools.templates()) datalist.createEl("option", { attr: { value: t } });
     templateInput.value = note.fm.template ?? "";
-    const saveTemplate = debounce(async () => {
-      const val = templateInput.value.trim();
-      note.fm.template = val || undefined;
-      await ctx.store.setMeetingTemplate(note.file, note.fm, val);
-    }, 600);
-    templateInput.addEventListener("input", saveTemplate);
+    templateInput.addEventListener("input", () => {
+      note.fm.template = templateInput.value.trim() || undefined;
+      markTemplateDirty();
+    });
     templateInput.addEventListener("click", (e) => e.stopPropagation());
-    revertFns.push(() => (templateInput.value = note.fm.template ?? ""));
   }
 
   if (isThoughts(note)) {
@@ -355,27 +381,21 @@ function renderTypeFields(
     qRow.createEl("label", { text: "Question" });
     const qInput = qRow.createEl("input", { cls: "logbook-field-input", attr: { type: "text" } });
     qInput.value = note.fm.question ?? "";
-    const saveQ = debounce(async () => {
-      const val = qInput.value.trim();
-      note.fm.question = val || undefined;
-      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.question = val));
-    }, 600);
-    qInput.addEventListener("input", saveQ);
+    qInput.addEventListener("input", () => {
+      note.fm.question = qInput.value.trim() || undefined;
+      dirty.add("question");
+    });
     qInput.addEventListener("click", (e) => e.stopPropagation());
-    revertFns.push(() => (qInput.value = note.fm.question ?? ""));
 
     const lRow = container.createDiv("logbook-field-row");
     lRow.createEl("label", { text: "Where I landed" });
     const lInput = lRow.createEl("input", { cls: "logbook-field-input", attr: { type: "text" } });
     lInput.value = note.fm.landed ?? "";
-    const saveL = debounce(async () => {
-      const val = lInput.value.trim();
-      note.fm.landed = val || undefined;
-      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.landed = val));
-    }, 600);
-    lInput.addEventListener("input", saveL);
+    lInput.addEventListener("input", () => {
+      note.fm.landed = lInput.value.trim() || undefined;
+      dirty.add("landed");
+    });
     lInput.addEventListener("click", (e) => e.stopPropagation());
-    revertFns.push(() => (lInput.value = note.fm.landed ?? ""));
   }
 
   if (isKnowledge(note)) {
@@ -387,9 +407,9 @@ function renderTypeFields(
       pool: () => [],
       placeholder: "+ tech",
       chipClass: "logbook-pill logbook-stack-chip",
-      onChange: async (next) => {
+      onChange: (next) => {
         note.fm.techStack = next;
-        await ctx.store.updateFrontmatter(note.file, (fm) => (fm.techStack = next));
+        dirty.add("techStack");
       },
     });
   }
