@@ -13,7 +13,8 @@ The core Logbook idea maps almost perfectly onto Obsidian's architecture:
 - Sync, backup, and version control are already solved (iCloud, Obsidian Sync, git).
 - `[[wikilinks]]` in note bodies connect Logbook notes to the rest of the vault.
 - Other plugins (Dataview, Tasks, Templater) can query Logbook notes by frontmatter.
-- Obsidian's own `MarkdownRenderer` and theme system cover rendering and visual styling for free.
+- Obsidian's own theme system and native editor/reading view cover rendering and visual styling for free — the plugin never needs to render a full note body itself.
+- Obsidian already tracks a last-modified time for every file and has its own tag system (frontmatter `tags`, inline `#tags`, the tag pane) — the plugin doesn't need to duplicate either.
 
 The trade-off: the UI lives inside Obsidian's constraints (a tab/pane, not a clean browser context) and inherits the user's installed theme rather than shipping its own. Custom views are capable enough that this is acceptable.
 
@@ -43,17 +44,17 @@ Renaming the file when the title is edited inline (see §4) must go through `app
 id: <stable identifier>   # generated on creation, never changes
 type: draft               # one of the six types below
 title: "Note title"
-tags: []
 projects: []              # free-form, lowercase-hyphenated; a note can belong to multiple
 teams: []                 # same shape as projects, but for people/groups
 createdAt: <ISO>
-updatedAt: <ISO>
 ---
 ```
 
-`updatedAt` is only bumped when content actually changes — re-opening and closing a note without edits doesn't reorder the feed.
+There is no plugin-managed `updatedAt` field. "Last activity" is read straight off the file itself — `file.stat.mtime`, which Obsidian already maintains for every file on every write, whether that write came from the plugin (a frontmatter edit) or from editing the body directly in Obsidian's native editor. Re-opening and closing a note without edits doesn't touch `mtime`, so it doesn't reorder the feed either.
 
 `id` is a stable identifier minted on creation (a short random/UUID string). It's what notes like a task's `sourceNoteId` link back to — filenames and titles can change without breaking that link.
+
+Tags are not a plugin-managed field. A note may or may not carry a `tags` frontmatter property — that's entirely Obsidian's own tag system (frontmatter `tags`, inline `#tags` in the body, the built-in tag pane and search). The plugin neither writes, edits, displays, nor filters by it; see §9.
 
 ### The six note types
 
@@ -96,7 +97,7 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 ### Order
 
 - Chronological, newest at the bottom. The view scrolls to the bottom on open.
-- Sort key is each note's **latest activity timestamp**: `updatedAt` for most notes, but for a recurring meeting it's the date of its most recent occurrence.
+- Sort key is each note's **latest activity timestamp**: the file's last-modified time (`file.stat.mtime`) for most notes, but for a recurring meeting it's the date of its most recent occurrence.
 - A newly created note always lands at the bottom of the feed, and the view scrolls to reveal it.
 - Day groups: `Today`, `Yesterday`, `Wednesday`, `Wed, May 14`, `May 14, 2024`.
 
@@ -121,34 +122,32 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 [badge] [proj1] [proj2] [+ project]          [▽] [2h]
 Note title
 Body preview — 2 lines, plain text…
-#tag1  #tag2
 ```
 
 - Type badge: colored dot + uppercase label.
 - Status pill (tasks, design notes only): read-only here.
 - Project chips inline in the top row; edit affordances (× buttons, add input) only appear once expanded.
 - `done` tasks render with the title struck through and the card dimmed; `suspended` tasks dimmed further.
-- Clicking anywhere on the card expands it. Clicking a `#tag`, project chip, team chip, or the type badge instead applies that as a filter (see §8) without expanding the card.
+- Clicking anywhere on the card expands it. Clicking a project chip, team chip, or the type badge instead applies that as a filter (see §8) without expanding the card.
 
 ### Expanded
 
-First click expands the card in place:
+First click expands the card in place. The card never renders the full body — that's deliberately out of scope (see "Opening in Obsidian's editor" below); the same short, plain-text preview from the collapsed state stays visible. Expanding only adds editable frontmatter affordances around it:
 
-- Preview hides; chevron rotates.
-- Full body renders via Obsidian's `MarkdownRenderer.render()` (the non-deprecated form — `renderMarkdown()` is deprecated), lazily on first expand, **read-only**. The body is never edited inline — see "Opening in Obsidian's editor" below. Each rendered card owns a `Component` whose `load()`/`unload()` the view manages explicitly; skipping this leaks event listeners (e.g. hover-preview on internal links) as cards expand/collapse and scroll in and out of the lazy-loaded window.
+- Chevron rotates.
 - Title becomes an editable input.
-- Project/team/tag pickers become editable inline: chips with ×, free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
+- Project/team pickers become editable inline: chips with ×, free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
 - Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`.
-- A **"New task from this note"** button: creates a new inline task note pre-filled with the source note's projects/teams/tags, a body line linking back to the source (generated via `app.fileManager.generateMarkdownLink()` so it respects the user's link-format settings, rather than a hardcoded `[[Title]]`), and `sourceNoteId` set to the source's `id`.
-- Footer: hint text (`⌘↵ save / esc collapse`), tags row, and an **"Open note →"** button.
+- A **"New task from this note"** button: creates a new inline task note pre-filled with the source note's projects/teams, a body line linking back to the source (generated via `app.fileManager.generateMarkdownLink()` so it respects the user's link-format settings, rather than a hardcoded `[[Title]]`), and `sourceNoteId` set to the source's `id`.
+- Footer: hint text (`⌘↵ save / esc collapse`) and an **"Open note →"** button.
 - `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` — there's no body write path from the expanded card at all.
-- `updatedAt` is only bumped if content actually changed.
+- No `updatedAt` bump to manage: any of these frontmatter writes updates `file.stat.mtime` automatically, which is what reorders the feed (see §2, §3).
 
 Second click on the card (outside an input) collapses it. Expanding a different card collapses whichever was open.
 
 ### Opening in Obsidian's editor
 
-Editing the body is never done inline in the feed — only frontmatter fields (title, tags, projects, teams, type-specific fields) are editable on the expanded card. To write or change body content, the **"Open note →"** button opens the underlying `.md` file in Obsidian's native editor (a new tab or pane, per the user's normal Obsidian behavior — `Cmd`/`Ctrl`-click for a new pane). This sidesteps maintaining a second, separate text buffer for the same file: Obsidian's own editor is the single source of truth for body content, with its own autosave and pane-splitting.
+Editing the body is never done inline in the feed — only frontmatter fields (title, projects, teams, type-specific fields) are editable on the expanded card, and the body is never even rendered there, only previewed as plain text. To read or write body content, the **"Open note →"** button opens the underlying `.md` file in Obsidian's native editor (a new tab or pane, per the user's normal Obsidian behavior — `Cmd`/`Ctrl`-click for a new pane). This sidesteps maintaining a second renderer or a second text buffer for the same file: Obsidian's own editor/reading view is the single place body content is ever displayed or edited, with its own autosave, markdown rendering, and pane-splitting.
 
 For a recurring meeting, opening the note shows the whole file, including every occurrence heading, in Obsidian's editor.
 
@@ -186,7 +185,7 @@ Common fields: `theme` (filterable), `attendees[]` (first names, shown inline on
 
 - `subtype: recurring`. Each occurrence is stored as a second-level heading (`## 2025-05-14`, ISO date) inside the single file's body, most recent first. `occurrences[]` in frontmatter mirrors those dates for fast indexing, but the `##` headings in the body are the canonical structure.
 - Card subtype indicator: `N occurrences`, plus the date of the latest one.
-- There is no inline occurrence UI on the card — expanding it shows the read-only body like any other note (see §4). Adding today's occurrence is a command, not a feed interaction: see **`/occurrence`** in §7.
+- There is no inline occurrence UI on the card — expanding it shows the same short preview like any other note (see §4); the full history of occurrences is only visible by opening the note in Obsidian's editor. Adding today's occurrence is a command, not a feed interaction: see **`/occurrence`** in §7.
 
 #### Meeting templates
 
@@ -198,8 +197,8 @@ Common fields: `theme` (filterable), `attendees[]` (first names, shown inline on
 
 An exploration of an idea or question.
 
-- `question` — shown above the body on the card and as a dedicated input field when expanded.
-- `landed` — optional takeaway/conclusion, shown as a "Where I landed" field below the body when expanded.
+- `question` — shown above the preview on the card and as a dedicated input field when expanded.
+- `landed` — optional takeaway/conclusion, shown as a "Where I landed" field below the preview when expanded.
 - The `/thoughts [question]` command pre-fills the `question` field.
 - Badge color: muted plum.
 
@@ -221,9 +220,9 @@ Technical design of part of a project.
 
 ## 6. Markdown support
 
-Bodies render through Obsidian's own `MarkdownRenderer`, so all of Obsidian's native markdown support — headings, bold/italic/strikethrough, inline code and fenced code blocks with syntax highlighting, lists and task checkboxes, blockquotes, GFM tables, links, and Obsidian-style callouts (`> [!note]`, `> [!tip]`, `> [!warning]`, `> [!info]`, `> [!quote]`) — is supported with no custom rendering work.
+The feed never renders a note's body as markdown — only a plain-text preview (markdown syntax stripped beyond headings/bold/italic/links, clamped to two lines), identical whether the card is collapsed or expanded. Full markdown support — headings, bold/italic/strikethrough, code blocks with syntax highlighting, task checkboxes, GFM tables, links, Obsidian-style callouts, and everything else — is simply whatever Obsidian's own native editor and reading view already provide once the note is opened (see §4, "Opening in Obsidian's editor"). The plugin does no rendering work for any of it.
 
-When a search/filter query is active, matching terms are wrapped in `<mark>` in both the collapsed card's body preview and the expanded card's rendered body.
+When a search/filter query is active, matching terms are wrapped in `<mark>` in the body preview, on both collapsed and expanded cards.
 
 ---
 
@@ -233,7 +232,7 @@ A single input at the bottom of the view, with two modes.
 
 ### Search mode (default)
 
-- Free text is a search query: matches AND across whitespace-separated terms, checked against `title`, `body`, `tags`, `projects`, `teams`, and every type-specific field.
+- Free text is a search query: matches AND across whitespace-separated terms, checked against `title`, `body`, `projects`, `teams`, and every type-specific field. (Searching by tag is Obsidian's own job — its search pane and tag pane already do this; see §9.)
 - Matches are highlighted (see §6) in card previews while the query is active.
 - When filters are active, the bar shows their chips to the left of the input (see §8).
 - Free text never creates a note — note creation only happens through `/` commands.
@@ -284,25 +283,25 @@ The dropdown fuzzy-matches by prefix as the user types. `Tab` selects the highli
 A filter narrows what the feed shows; all active filters AND together. Filter axes:
 
 - Free-text query (search)
-- Tags (multi-select)
 - Projects (multi-select)
 - Teams (multi-select)
 - Type (single)
 - Type-specific attribute (single, available once a type filter is set)
 
+Tags are not a filter axis here — filtering by tag is Obsidian's own search/tag pane, not something the plugin reimplements (see §9).
+
 ### Filter chips
 
-Active filters appear as chips inside the command bar, to the left of the input: a hashtag-prefixed pill for tags, a folder-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
+Active filters appear as chips inside the command bar, to the left of the input: a folder-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
 
 ### Removing filters
 
 - Click the × on a chip.
-- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: tags → project → team → type → type attribute.
+- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: project → team → type → type attribute.
 - Run `/clear`.
 
 ### Clicking things
 
-- Clicking a `#tag` on a card adds it to the active tag filters.
 - Clicking a project or team chip on a card adds it as an active project/team filter.
 - Clicking a type badge on a card sets it as the active type filter.
 
@@ -314,9 +313,7 @@ This is the primary way users discover filtering — no query syntax to learn, j
 
 ### Tags
 
-- Free-form, lowercase, hyphenated. Created on the fly by typing a new value in any tag input.
-- The set of all tags is the union of every note's `tags[]`.
-- Tag inputs autocomplete from existing tags.
+Logbook has no tag feature of its own. Tagging a note is done exactly the way it's done on any other note in the vault — Obsidian's built-in `tags` frontmatter property, inline `#tags` in the body, the Properties editor, the tag pane, and tag-aware search. The plugin doesn't read, write, display, or filter on tags anywhere; it simply never touches that property and leaves it entirely to Obsidian.
 
 ### Projects & teams
 
@@ -333,7 +330,7 @@ A note can belong to multiple projects and multiple teams; `projects[]`/`teams[]
 
 A chevron action in the pane's title bar (added via `addAction`) toggles collapse mode:
 
-- Each card shows only its type badge and title, one per line — no body preview, no meta, no tags.
+- Each card shows only its type badge and title, one per line — no body preview, no meta.
 - A second click restores the full view.
 - Persists for the session; resets on reload.
 
@@ -359,7 +356,7 @@ No shortcut in the plugin is a global, app-wide single-key capture — Obsidian 
 
 The command bar itself is always visible at the bottom of the view, so opening it is just a click — no shortcut needed to summon it.
 
-Inside any tag/project/team input:
+Inside any project/team input:
 
 | Key | Action |
 |---|---|
@@ -376,6 +373,8 @@ Inside any tag/project/team input:
 - ~~Sharing, comments, collaboration~~ — out of scope.
 - ~~A nested note hierarchy~~ — flat by design.
 - ~~A custom theme~~ — see §11; the plugin defers entirely to the user's installed Obsidian theme.
+- ~~A tag manager~~ — tags are edited via Obsidian's own Properties panel, inline `#tags`, and tag pane; see §9. The plugin doesn't add a picker, chips, or a filter axis on top of them.
+- ~~A second body renderer~~ — the feed only ever shows a plain-text preview; full markdown rendering happens once, in Obsidian's own editor/reading view, when the note is opened (see §4, §6).
 
 ---
 
@@ -385,12 +384,11 @@ Inside any tag/project/team input:
 - **Status pill** — tasks and design notes only. Read-only on the collapsed card; editable (click to cycle) on the expanded card.
 - **Project chip** — lab icon + value, background-tinted; multiple per note.
 - **Team chip** — people icon + value, italicised; multiple per note.
-- **Tag chip** — hashtag-prefixed pill.
 - **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
 - **Date dividers** — uppercase tracked-out label between two hairlines.
 - **Collapse toggle** — a chevron view action in the pane's title bar; toggles title-only view.
 
-A consistent rule: dots, hashes, and icons prefix every chip so filter context is readable without relying on color.
+A consistent rule: dots and icons prefix every chip so filter context is readable without relying on color.
 
 ---
 
@@ -399,6 +397,7 @@ A consistent rule: dots, hashes, and icons prefix every chip so filter context i
 - **`processFrontMatter`** is used for all frontmatter edits — Obsidian's official API for updating frontmatter without touching the body, with correct YAML serialization.
   > ⚠️ **Known risk:** Obsidian's forum has multiple open reports of `processFrontMatter` calls silently dropping or reverting changes when called rapidly/concurrently on the same file (e.g. deletes that leave empty frontmatter, or one call's result getting overwritten by an in-flight one). The status pill (click-to-cycle, saves immediately), the 600ms autosave, and rename-on-title-change can all hit this API back-to-back on the same note. Calls touching the same file need to be serialized (queued one-at-a-time per file path) rather than fired independently — this needs a deliberate write-queue design, not just "call the API and trust it."
 - **Metadata cache** (`app.metadataCache`) is the source of truth for all frontmatter reads — filtering and rendering card metadata never touches disk directly; reads are synchronous and instant.
+- **`file.stat.mtime` is the sort/display timestamp** — there's no frontmatter `updatedAt` to bump. `TFile.stat.mtime` already reflects every write to the file, whether it's a plugin-driven `processFrontMatter` call or a body edit made directly in Obsidian's native editor, so the feed's ordering and each card's relative-time pill (`2h`, etc.) just read it off the file the vault/metadata-cache events already keep current.
 - **Refresh suppression** — after a `processFrontMatter` call, vault events fire immediately. The feed suppresses re-renders for 600 ms afterward so an open expanded card isn't torn down mid-edit.
 - **No custom sync** — notes are plain `.md` files in the vault; whatever sync the user already has (iCloud, Obsidian Sync, git) handles them.
 - **Trash, not delete** — destructive operations (draft auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting.
