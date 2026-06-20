@@ -16,6 +16,7 @@ export class LogbookView extends ItemView {
   private feedEl!: HTMLElement;
 
   private allNotes: LogNote[] = [];
+  private templateTitles: string[] = [];
   private filters: FilterState = emptyFilters();
   private monthsBack = INITIAL_WINDOW_MONTHS;
   private loadingMore = false;
@@ -105,6 +106,7 @@ export class LogbookView extends ItemView {
 
   private async refresh() {
     this.allNotes = await this.store.loadNotes();
+    this.templateTitles = (await this.store.listTemplates()).map((t) => t.title);
     this.renderDisplay();
   }
 
@@ -198,6 +200,7 @@ export class LogbookView extends ItemView {
         projects: () => this.collectPool((n) => n.fm.projects),
         teams: () => this.collectPool((n) => n.fm.teams),
         tags: () => this.collectPool((n) => n.fm.tags),
+        templates: () => this.templateTitles,
       },
       searchQuery: this.filters.query,
       onFilterTag: (tag) => {

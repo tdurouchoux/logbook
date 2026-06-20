@@ -25,7 +25,7 @@ export interface CardContext {
   isExpanded(path: string): boolean;
   expand(path: string): void;
   collapse(path: string): void;
-  pools: { projects(): string[]; teams(): string[]; tags(): string[] };
+  pools: { projects(): string[]; teams(): string[]; tags(): string[]; templates(): string[] };
   searchQuery: string;
   onFilterTag(tag: string): void;
   onFilterProject(p: string): void;
@@ -329,6 +329,25 @@ function renderTypeFields(
         await ctx.store.updateFrontmatter(note.file, (fm) => (fm.attendees = next));
       },
     });
+
+    const templateRow = container.createDiv("logbook-field-row");
+    templateRow.createEl("label", { text: "Template" });
+    const templateListId = `logbook-templates-${note.file.path.replace(/[^a-zA-Z0-9]/g, "-")}`;
+    const templateInput = templateRow.createEl("input", {
+      cls: "logbook-field-input",
+      attr: { type: "text", placeholder: "none", list: templateListId },
+    });
+    const datalist = templateRow.createEl("datalist", { attr: { id: templateListId } });
+    for (const t of ctx.pools.templates()) datalist.createEl("option", { attr: { value: t } });
+    templateInput.value = note.fm.template ?? "";
+    const saveTemplate = debounce(async () => {
+      const val = templateInput.value.trim();
+      note.fm.template = val || undefined;
+      await ctx.store.setMeetingTemplate(note.file, note.fm, val);
+    }, 600);
+    templateInput.addEventListener("input", saveTemplate);
+    templateInput.addEventListener("click", (e) => e.stopPropagation());
+    revertFns.push(() => (templateInput.value = note.fm.template ?? ""));
   }
 
   if (isThoughts(note)) {

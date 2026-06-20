@@ -2,7 +2,7 @@
 
 Tracks the gap between `design.md` and the current prototype (`plugin/src/main.ts`). Organized as phases, each phase roughly independent and shippable. Check items off as they land.
 
-**Current state:** Phases 0–8 and 10 are complete — modular file layout, the full data layer (write queue, refresh suppression + settle resync, stable ids), all six note types with their type-specific fields, full collapsed/expanded card behavior, feed grouping/pagination/empty-states, the full command bar (creation + filter/utility commands), and the filtering/search engine. Remaining: meeting template scaffolding (Phase 9) and in-Obsidian manual QA (Phase 11) — everything else has been implemented and verified via `tsc -noEmit` + `esbuild` after every change.
+**Current state:** Phases 0–10 are complete — modular file layout, the full data layer (write queue, refresh suppression + settle resync, stable ids), all six note types with their type-specific fields including meeting template scaffolding, full collapsed/expanded card behavior with a unified pill design system, feed grouping/pagination/empty-states, the full command bar (creation + filter/utility commands), and the filtering/search engine. Remaining: one in-Obsidian manual QA item in Phase 11 (verifying markdown rendering breadth — tables/callouts/checkboxes/code blocks against the active theme) that genuinely can't be done outside a live Obsidian vault — everything else has been implemented and verified via `tsc -noEmit` + `esbuild` after every change.
 
 ---
 
@@ -100,8 +100,8 @@ The entire prototype lives in one 700-line `main.ts`. Split it before piling on 
 ## Phase 9 — Meeting specifics
 
 - [x] Recurring meeting body structure: `## <ISO date>` headings, most recent first; `occurrences[]` frontmatter mirrors them
-- [ ] Meeting template type: `type: template` notes containing only `###` headings, no body — `loadNotes` already excludes `type: template` notes from the feed, but there's no creation path or scaffolding logic that reads one
-- [ ] Applying a template on creation (standalone) or new occurrence (recurring) pre-fills the body scaffold from the template's headings — **not implemented**
+- [x] Meeting template type: `type: template` notes containing only `###` headings, no body — `loadNotes` excludes them from the feed; `NoteStore.listTemplates()` discovers them by scanning the folder's frontmatter cache for `type: template`. No dedicated `/template` creation command was added — templates aren't normal logged notes (not part of the `NoteType` union/feed), so they're authored as plain files like any other Obsidian template; the plugin only needs to *read* them
+- [x] Applying a template on creation (standalone) or new occurrence (recurring) pre-fills the body scaffold from the template's headings — meeting card now has a "Template" field (autocomplete from `listTemplates()`); setting it on a standalone meeting with an empty body scaffolds the `###` headings in immediately via `NoteStore.setMeetingTemplate`, and `/occurrence` on a recurring meeting with a template set scaffolds each new occurrence's headings under its `## <date>` heading via `NoteStore.addOrFindTodayOccurrence`
 - [x] Opening a recurring meeting in Obsidian's editor shows the full file with every occurrence (no special handling needed — it's a plain markdown file)
 
 ## Phase 10 — Lifecycle & housekeeping

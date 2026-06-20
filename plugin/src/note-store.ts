@@ -172,11 +172,58 @@ export class NoteStore {
     const today = todayISO();
     if (fm.occurrences?.includes(today)) return;
 
-    await this.app.vault.process(file, (content) => insertOccurrenceHeading(content, today));
+    const headings = fm.template ? await this.getTemplateHeadings(fm.template) : [];
+    await this.app.vault.process(file, (content) => insertOccurrenceHeading(content, today, headings));
     await this.updateFrontmatter(file, (raw) => {
       const occ: string[] = Array.isArray(raw.occurrences) ? raw.occurrences : [];
       raw.occurrences = [today, ...occ.filter((d) => d !== today)];
     });
+  }
+
+  /** design.md §5.3 meeting templates — notes with `type: template` in the logbook folder, headings-only. */
+  async listTemplates(): Promise<{ title: string; path: string }[]> {
+    const prefix = this.folder + "/";
+    const files = this.app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(prefix));
+    const templates: { title: string; path: string }[] = [];
+    for (const file of files) {
+      const raw = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      if (raw?.type === "template") {
+        templates.push({ title: typeof raw.title === "string" ? raw.title : file.basename, path: file.path });
+      }
+    }
+    return templates;
+  }
+
+  private async getTemplateHeadings(templateTitle: string): Promise<string[]> {
+    const templates = await this.listTemplates();
+    const match = templates.find((t) => t.title === templateTitle);
+    if (!match) return [];
+    const file = this.app.vault.getAbstractFileByPath(match.path);
+    if (!(file instanceof TFile)) return [];
+    const content = await this.app.vault.cachedRead(file);
+    const end = content.indexOf("\n---\n");
+    const body = content.startsWith("---") && end >= 0 ? content.slice(end + 5) : content;
+    return body
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("###"));
+  }
+
+  /** Sets a meeting's template reference; for standalone meetings with no body yet, also scaffolds it. */
+  async setMeetingTemplate(file: TFile, fm: MeetingFrontmatter, template: string): Promise<void> {
+    await this.updateFrontmatter(file, (raw) => {
+      raw.template = template || undefined;
+    });
+    if (!template || fm.subtype !== "standalone") return;
+
+    const content = await this.app.vault.cachedRead(file);
+    const end = content.indexOf("\n---\n");
+    const body = content.startsWith("---") && end >= 0 ? content.slice(end + 5).trim() : "";
+    if (body) return;
+
+    const headings = await this.getTemplateHeadings(template);
+    if (!headings.length) return;
+    await this.app.vault.process(file, (c) => scaffoldBody(c, headings));
   }
 
   /** design.md §4 "New task from this note" — pre-filled task linking back to its source. */
@@ -280,13 +327,21 @@ function appendBodyLine(content: string, line: string): string {
   return head + (body ? body + "\n\n" : "") + line + "\n";
 }
 
-function insertOccurrenceHeading(content: string, isoDate: string): string {
+function insertOccurrenceHeading(content: string, isoDate: string, headingLines: string[] = []): string {
   const end = content.indexOf("\n---\n");
   const fmEnd = content.startsWith("---") && end >= 0 ? end + 5 : 0;
   const head = content.slice(0, fmEnd);
   const body = content.slice(fmEnd);
-  const heading = `## ${isoDate}\n\n`;
+  const scaffold = headingLines.length ? headingLines.join("\n\n") + "\n\n" : "";
+  const heading = `## ${isoDate}\n\n${scaffold}`;
   // Insert above all existing occurrence headings, i.e. right at the top of the body.
   const trimmedBody = body.replace(/^\s*/, "");
   return head + heading + trimmedBody;
+}
+
+function scaffoldBody(content: string, headingLines: string[]): string {
+  const end = content.indexOf("\n---\n");
+  const fmEnd = content.startsWith("---") && end >= 0 ? end + 5 : 0;
+  const head = content.slice(0, fmEnd);
+  return head + headingLines.join("\n\n") + "\n";
 }
