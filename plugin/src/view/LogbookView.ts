@@ -267,6 +267,12 @@ export class LogbookView extends ItemView {
     titleOrQuestion: string,
     opts?: { done?: boolean; recurring?: boolean }
   ) {
+    // Mirrors what ctx.expand() does when switching between two existing cards
+    // (commit + collapse the previously-open one) — createAndShow sets
+    // expandedPath directly rather than going through ctx.expand(), so without
+    // this the previously-open card was left expanded with its edits unsaved.
+    if (this.activeCloseHandler) await this.activeCloseHandler();
+
     const file = opts?.done
       ? await this.store.createDoneTask(titleOrQuestion)
       : opts?.recurring
@@ -277,6 +283,9 @@ export class LogbookView extends ItemView {
     this.pendingDivider = `Writing a ${NOTE_TYPES[type].label.toLowerCase()}`;
     this.pendingNotePath = file.path;
     await this.refresh();
+    // Also bypassed by not going through ctx.expand(): opening the new note in
+    // Obsidian's own editor, same as expanding any other card does.
+    await this.app.workspace.openLinkText(file.path, "", false);
   }
 
   private async handleOccurrence(meeting: RecurringMeetingRef) {

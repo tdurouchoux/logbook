@@ -168,6 +168,8 @@ Editing the body is never done inline in the feed — only frontmatter fields (t
 
 For a recurring meeting, opening the note shows the whole file, including every occurrence heading, in Obsidian's editor.
 
+Creating a note from the command bar follows the same rule, since the resulting card is rendered already-expanded: the previously-expanded card (if any) is closed/saved first, exactly as if the user had clicked to expand a different card, and the new note opens in Obsidian's editor immediately.
+
 ---
 
 ## 5. The six note types
