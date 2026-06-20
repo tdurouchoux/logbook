@@ -97,7 +97,7 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 ### Order
 
 - Chronological, newest at the bottom. The view scrolls to the bottom on open.
-- Sort key is each note's **latest activity timestamp**: the file's last-modified time (`file.stat.mtime`) for most notes, but for a recurring meeting it's the date of its most recent occurrence.
+- Sort key is each note's **latest activity timestamp**: the file's last-modified time (`file.stat.mtime`) for most notes, but for a recurring meeting it's the date of its most recent occurrence — unless that occurrence is today, in which case `file.stat.mtime` is used after all, since a bare date has no time-of-day and would otherwise always sort earlier than every other note touched today.
 - A newly created note always lands at the bottom of the feed, and the view scrolls to reveal it.
 - Day groups: `Today`, `Yesterday`, `Wednesday`, `Wed, May 14`, `May 14, 2024`.
 - **Stable position while expanded:** any frontmatter write — a status pill click, a project edit — bumps `file.stat.mtime` just like a body edit, but the feed doesn't resort an open card out from under the user. A card holds its current position *and day-group* for as long as it's expanded — both the sort and the day-grouping use its frozen timestamp, not its live one — and only catches up to its new sorted position (and day group) once it collapses. Without this, toggling a status pill mid-edit could make the card (and its whole day-group) jump elsewhere in the feed and scroll out of view — disorienting, since the user's attention is still on it.

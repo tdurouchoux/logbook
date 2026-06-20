@@ -131,12 +131,29 @@ export function isDesign(n: LogNote): n is LogNote & { fm: DesignFrontmatter } {
   return n.fm.type === "design";
 }
 
-/** Sort key per design.md §3: file.stat.mtime, except recurring meetings use latest occurrence. */
+/** "YYYY-MM-DD" parsed as a local-midnight Date — the bare `Date` string constructor
+ *  treats date-only strings as UTC, which can land on the wrong local calendar day. */
+function localDateFromISO(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+/** Sort key per design.md §3: file.stat.mtime, except recurring meetings use latest occurrence —
+ *  unless that occurrence is today, in which case file.stat.mtime is used instead. A bare
+ *  occurrence date has no time-of-day, so it would otherwise always sort earlier than every
+ *  other note touched today (which carry a real intraday mtime), pinning a just-created or
+ *  just-edited recurring meeting to the top of "Today" instead of the bottom. */
 export function activityTimestamp(n: LogNote): number {
   if (isMeeting(n) && n.fm.subtype === "recurring" && n.fm.occurrences?.length) {
-    const latest = n.fm.occurrences[0];
-    const t = new Date(latest).getTime();
-    if (!Number.isNaN(t)) return t;
+    const occDate = localDateFromISO(n.fm.occurrences[0]);
+    if (!Number.isNaN(occDate.getTime())) {
+      const today = new Date();
+      const isToday =
+        occDate.getFullYear() === today.getFullYear() &&
+        occDate.getMonth() === today.getMonth() &&
+        occDate.getDate() === today.getDate();
+      return isToday ? n.file.stat.mtime : occDate.getTime();
+    }
   }
   return n.file.stat.mtime;
 }
