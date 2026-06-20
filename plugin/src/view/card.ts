@@ -29,7 +29,14 @@ export interface CardContext {
   onFilterType(type: NoteType, attr?: { key: string; value: string }): void;
 }
 
-export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
+/** Builds a card detached from any parent, for callers that want to place/cache it themselves (see feed.ts's incremental diff). */
+export function buildCard(note: LogNote, ctx: CardContext): HTMLElement {
+  const wrapper = document.createElement("div");
+  renderCard(wrapper, note, ctx);
+  return wrapper.firstElementChild as HTMLElement;
+}
+
+function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const typeInfo = NOTE_TYPES[note.fm.type] ?? NOTE_TYPES.draft;
   const isExpanded = ctx.isExpanded(note.file.path);
 

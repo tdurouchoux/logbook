@@ -3,7 +3,7 @@ import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
 import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_SUBTYPES, activityTimestamp } from "../types";
 import { FilterState, applyFilters, emptyFilters, hasActiveFilters } from "../filters";
-import { renderFeed } from "./feed";
+import { renderFeed, CardCache } from "./feed";
 import { CardContext } from "./card";
 import { Dock, RecurringMeetingRef } from "./dock";
 
@@ -23,6 +23,7 @@ export class LogbookView extends ItemView {
 
   private expandedPath: string | null = null;
   private frozenTimestamp: number | null = null;
+  private cardCache: CardCache = new Map();
   private pendingDivider: string | undefined;
   private pendingNotePath: string | undefined;
 
@@ -213,7 +214,8 @@ export class LogbookView extends ItemView {
         pendingNotePath: this.pendingNotePath,
         activityOf: (n) => this.sortKey(n),
       },
-      ctx
+      ctx,
+      this.cardCache
     );
   }
 
