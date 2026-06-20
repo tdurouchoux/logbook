@@ -126,6 +126,56 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
 
   top.createEl("span", { cls: "logbook-time", text: relativeTime(new Date(note.file.stat.mtime)) });
 
+  // ── Commit / discard ────────────────────────────────────────────────────
+  // Defined here (rather than down by the fields that use it) so every editable
+  // input — including the ones below — can wire its own Cmd/Ctrl+Enter handler
+  // directly, instead of relying on the keystroke bubbling all the way up to a
+  // single card-level listener (which a picker's own Enter handling, or some
+  // future child listener, could swallow before it gets there).
+  /** Flushes every staged edit in as few writes as possible: a rename (title),
+   *  a template scaffold (meeting template), and one batched frontmatter write
+   *  for everything else (design.md §4). */
+  const commit = async () => {
+    if (titleDirty) {
+      titleDirty = false;
+      await ctx.store.renameTitle(note.file, note.fm.title);
+    }
+    if (templateDirty && isMeeting(note)) {
+      templateDirty = false;
+      await ctx.store.setMeetingTemplate(note.file, note.fm, note.fm.template ?? "");
+    }
+    if (dirty.size > 0) {
+      const keys = Array.from(dirty);
+      dirty.clear();
+      await ctx.store.updateFrontmatter(note.file, (raw) => {
+        for (const k of keys) raw[k] = (note.fm as unknown as Record<string, unknown>)[k];
+      });
+    }
+  };
+  const collapseUI = () => {
+    card.removeClass("is-expanded");
+    top.insertBefore(pillsRow, chevron);
+  };
+  const closeAndSave = async () => {
+    await commit();
+    ctx.collapse(note.file.path);
+    collapseUI();
+  };
+  /** Attach directly to every field input — fires regardless of whatever a
+   *  child's own keydown handling (e.g. a picker's Enter-to-add) might do,
+   *  since it's the first listener to see the event, not the last. */
+  const onFieldKeydown = (e: KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      e.stopPropagation();
+      void closeAndSave();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      ctx.discardEdits(note.file.path);
+    }
+  };
+
   const titleRow = header.createDiv("logbook-title-row");
   if (isThoughts(note) && note.fm.question) {
     titleRow.createEl("div", { cls: "logbook-question", text: note.fm.question });
@@ -178,49 +228,19 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     }
   });
   titleInput.addEventListener("click", (e) => e.stopPropagation());
+  titleInput.addEventListener("keydown", onFieldKeydown);
 
   // Type-specific editable fields (status/subtype live in pillsRow, not here)
   const typeFieldsEl = expandInner.createDiv("logbook-type-fields");
-  renderTypeFields(typeFieldsEl, note, ctx, dirty, () => (templateDirty = true));
+  renderTypeFields(typeFieldsEl, note, ctx, dirty, () => (templateDirty = true), onFieldKeydown);
 
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
-
-  // ── Commit / discard ────────────────────────────────────────────────────
-  /** Flushes every staged edit in as few writes as possible: a rename (title),
-   *  a template scaffold (meeting template), and one batched frontmatter write
-   *  for everything else (design.md §4). */
-  const commit = async () => {
-    if (titleDirty) {
-      titleDirty = false;
-      await ctx.store.renameTitle(note.file, note.fm.title);
-    }
-    if (templateDirty && isMeeting(note)) {
-      templateDirty = false;
-      await ctx.store.setMeetingTemplate(note.file, note.fm, note.fm.template ?? "");
-    }
-    if (dirty.size > 0) {
-      const keys = Array.from(dirty);
-      dirty.clear();
-      await ctx.store.updateFrontmatter(note.file, (raw) => {
-        for (const k of keys) raw[k] = (note.fm as unknown as Record<string, unknown>)[k];
-      });
-    }
-  };
 
   // ── Expand / collapse toggle ────────────────────────────────────────────
   // The card never renders the body inline — expanding opens the real note in
   // Obsidian's editor instead (design.md §4, §6), and the body preview (shown
   // only while collapsed) is hidden via CSS on .is-expanded.
-  const collapseUI = () => {
-    card.removeClass("is-expanded");
-    top.insertBefore(pillsRow, chevron);
-  };
-  const closeAndSave = async () => {
-    await commit();
-    ctx.collapse(note.file.path);
-    collapseUI();
-  };
   const expand = () => {
     ctx.expand(note.file.path, closeAndSave);
     card.addClass("is-expanded");
@@ -243,15 +263,10 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     card.hasClass("is-expanded") ? void closeAndSave() : expand();
   });
 
-  card.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      void closeAndSave();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      ctx.discardEdits(note.file.path);
-    }
-  });
+  // Fallback for Cmd/Ctrl+Enter or Esc while focus is on the card itself or a
+  // non-input element inside it (e.g. a pill) — every actual input already has
+  // its own onFieldKeydown listener above, which fires first.
+  card.addEventListener("keydown", onFieldKeydown);
 }
 
 function renderBadge(parent: HTMLElement, type: NoteType): HTMLElement {
@@ -336,7 +351,8 @@ function renderTypeFields(
   note: LogNote,
   ctx: CardContext,
   dirty: Set<string>,
-  markTemplateDirty: () => void
+  markTemplateDirty: () => void,
+  onFieldKeydown: (e: KeyboardEvent) => void
 ) {
   if (isMeeting(note)) {
     const themeRow = container.createDiv("logbook-field-row");
@@ -351,6 +367,7 @@ function renderTypeFields(
       dirty.add("theme");
     });
     themeInput.addEventListener("click", (e) => e.stopPropagation());
+    themeInput.addEventListener("keydown", onFieldKeydown);
 
     const attendeesRow = container.createDiv("logbook-field-row");
     attendeesRow.createEl("label", { text: "Attendees" });
@@ -381,6 +398,7 @@ function renderTypeFields(
       markTemplateDirty();
     });
     templateInput.addEventListener("click", (e) => e.stopPropagation());
+    templateInput.addEventListener("keydown", onFieldKeydown);
   }
 
   if (isThoughts(note)) {
@@ -393,6 +411,7 @@ function renderTypeFields(
       dirty.add("question");
     });
     qInput.addEventListener("click", (e) => e.stopPropagation());
+    qInput.addEventListener("keydown", onFieldKeydown);
 
     const lRow = container.createDiv("logbook-field-row");
     lRow.createEl("label", { text: "Where I landed" });
@@ -403,6 +422,7 @@ function renderTypeFields(
       dirty.add("landed");
     });
     lInput.addEventListener("click", (e) => e.stopPropagation());
+    lInput.addEventListener("keydown", onFieldKeydown);
   }
 
   if (isKnowledge(note)) {

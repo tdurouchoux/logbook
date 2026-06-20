@@ -1,6 +1,6 @@
 import { LogNote } from "../types";
 import { FilterState, hasActiveFilters } from "../filters";
-import { groupByDay } from "../utils";
+import { groupByDay, relativeTime } from "../utils";
 import { CardContext, buildCard } from "./card";
 
 export interface FeedRenderOptions {
@@ -81,6 +81,12 @@ function resolveCard(note: LogNote, cardCtx: CardContext, cache: CardCache): HTM
   // While expanded, keep the live DOM untouched no matter what changed elsewhere —
   // the user is actively in this card and its own listeners already keep the file in sync.
   if (cached && (cardCtx.isExpanded(note.file.path) || cached.sig === sig)) {
+    // The signature only tracks the note's own data, not wall-clock time — so a
+    // reused card whose underlying note hasn't changed would otherwise show a
+    // relative time ("now", "2m"...) frozen at whatever it said when it was last
+    // actually rebuilt. Refresh just that text node on every pass instead.
+    const timeEl = cached.el.querySelector(".logbook-time");
+    if (timeEl) timeEl.textContent = relativeTime(new Date(note.file.stat.mtime));
     return cached.el;
   }
   const el = buildCard(note, cardCtx);

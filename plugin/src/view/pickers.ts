@@ -116,6 +116,10 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
     });
 
     input.addEventListener("keydown", async (e) => {
+      // Cmd/Ctrl+Enter is the card's save-and-close shortcut (design.md §4/§18) —
+      // leave it alone here so it bubbles up to the card's own listener instead
+      // of being treated as "add this value".
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) return;
       if (e.key === "Enter" || e.key === ",") {
         e.preventDefault();
         e.stopPropagation();
@@ -134,7 +138,8 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
         await opts.onChange(updated);
         render(updated, true);
       } else if (e.key === "Escape") {
-        e.stopPropagation();
+        // Don't stop propagation: let the card's own Escape handler (discard
+        // edits) also see this, same as Esc on any other field input.
         input.blur();
       }
     });
