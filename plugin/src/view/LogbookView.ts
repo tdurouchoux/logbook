@@ -216,6 +216,7 @@ export class LogbookView extends ItemView {
         onLoadMore: () => void this.loadMoreHistory(),
         pendingDivider: this.pendingDivider,
         pendingNotePath: this.pendingNotePath,
+        activityOf: (n) => this.sortKey(n),
       },
       ctx
     );

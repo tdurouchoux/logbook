@@ -1,7 +1,6 @@
 import { LogNote } from "../types";
 import { FilterState, hasActiveFilters } from "../filters";
 import { groupByDay } from "../utils";
-import { activityTimestamp } from "../types";
 import { CardContext, renderCard } from "./card";
 
 export interface FeedRenderOptions {
@@ -12,6 +11,10 @@ export interface FeedRenderOptions {
   onLoadMore(): void;
   pendingDivider?: string; // "Writing a [type]" divider shown above a just-created note
   pendingNotePath?: string;
+  // Same key `notes` is sorted by — day-grouping must use it too, or an expanded
+  // card whose real mtime just changed gets bucketed into a different day-group
+  // (and that whole group reordered) even though its position in `notes` was held.
+  activityOf(note: LogNote): number;
 }
 
 export function renderFeed(feedEl: HTMLElement, opts: FeedRenderOptions, cardCtx: CardContext) {
@@ -43,7 +46,7 @@ export function renderFeed(feedEl: HTMLElement, opts: FeedRenderOptions, cardCtx
     return;
   }
 
-  for (const [label, group] of groupByDay(opts.notes, activityTimestamp)) {
+  for (const [label, group] of groupByDay(opts.notes, opts.activityOf)) {
     const divider = feedEl.createDiv("logbook-divider");
     divider.createSpan({ text: label });
     for (const note of group) renderCard(feedEl, note, cardCtx);
