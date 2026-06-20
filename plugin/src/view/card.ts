@@ -26,7 +26,7 @@ export interface CardContext {
   searchQuery: string;
   onFilterProject(p: string): void;
   onFilterTeam(t: string): void;
-  onFilterType(type: NoteType): void;
+  onFilterType(type: NoteType, attr?: { key: string; value: string }): void;
 }
 
 export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
@@ -51,26 +51,50 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     ctx.onFilterType(note.fm.type);
   });
 
-  if ((isTask(note) || isDesign(note)) && !isExpanded) {
-    renderStatusPill(top, note, ctx, false);
-  }
+  // Filterable-property pill + project/team pills: live in the top row while
+  // collapsed, and relocate into the field block once expanded (design.md §4)
+  // — same DOM nodes either way, just moved between containers below.
+  const pillsRow = top.createDiv("logbook-pills-row");
 
-  const projectRow = top.createDiv("logbook-project-row");
+  renderFilterAttrPill(pillsRow, note, ctx, card);
+
+  const projectRow = pillsRow.createDiv("logbook-project-row");
   renderPicker(projectRow, {
     values: note.fm.projects,
     pool: ctx.pools.projects,
     placeholder: "+ project",
     chipClass: "logbook-pill logbook-project-chip",
+    icon: "briefcase",
     onChange: async (next) => {
       note.fm.projects = next;
       await ctx.store.updateFrontmatter(note.file, (fm) => (fm.projects = next));
     },
   });
-  // Clicking an existing project chip (not its × or the input) filters by it.
-  projectRow.querySelectorAll(".logbook-project-chip > span:first-child").forEach((el, i) => {
+  // Clicking an existing project chip's label (not its × or the input) filters by it.
+  projectRow.querySelectorAll(".logbook-project-chip .logbook-pill-label").forEach((el, i) => {
     el.addEventListener("click", (e) => {
       e.stopPropagation();
       ctx.onFilterProject(note.fm.projects[i]);
+    });
+  });
+
+  const teamRow = pillsRow.createDiv("logbook-team-row");
+  renderPicker(teamRow, {
+    values: note.fm.teams,
+    pool: ctx.pools.teams,
+    placeholder: "+ team",
+    chipClass: "logbook-pill logbook-team-chip",
+    icon: "users",
+    onChange: async (next) => {
+      note.fm.teams = next;
+      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.teams = next));
+    },
+  });
+  // Clicking an existing team chip's label (not its × or the input) filters by it.
+  teamRow.querySelectorAll(".logbook-team-chip .logbook-pill-label").forEach((el, i) => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      ctx.onFilterTeam(note.fm.teams[i]);
     });
   });
 
@@ -140,22 +164,9 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     titleEl.textContent = note.fm.title;
   });
 
-  // Type-specific editable fields
+  // Type-specific editable fields (status/subtype live in pillsRow, not here)
   const typeFieldsEl = expandInner.createDiv("logbook-type-fields");
   renderTypeFields(typeFieldsEl, note, ctx, revertFns);
-
-  const pickersRow = expandInner.createDiv("logbook-pickers-row");
-  const teamWrap = pickersRow.createDiv("logbook-team-row");
-  renderPicker(teamWrap, {
-    values: note.fm.teams,
-    pool: ctx.pools.teams,
-    placeholder: "+ team",
-    chipClass: "logbook-pill logbook-team-chip",
-    onChange: async (next) => {
-      note.fm.teams = next;
-      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.teams = next));
-    },
-  });
 
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
@@ -168,19 +179,25 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
 
   // ── Expand / collapse toggle ────────────────────────────────────────────
   // The card never renders the body — only the same preview shown collapsed
-  // (design.md §4, §6) — so expanding/collapsing is just a class toggle.
+  // (design.md §4, §6) — so expanding/collapsing is just a class toggle, plus
+  // relocating pillsRow between the top row and the expanded field block.
   const expand = () => {
     ctx.expand(note.file.path);
     card.addClass("is-expanded");
+    expandInner.insertBefore(pillsRow, typeFieldsEl);
     titleInput.focus();
   };
   const collapse = () => {
     ctx.collapse(note.file.path);
     card.removeClass("is-expanded");
+    top.insertBefore(pillsRow, chevron);
   };
+  // A card can be rendered already-expanded (e.g. right after creation) —
+  // match pillsRow's location to that initial state.
+  if (isExpanded) expandInner.insertBefore(pillsRow, typeFieldsEl);
 
   header.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest("input, button, .logbook-status-pill")) return;
+    if ((e.target as HTMLElement).closest("input, button, .logbook-pill, .logbook-badge")) return;
     card.hasClass("is-expanded") ? collapse() : expand();
   });
 
@@ -206,22 +223,53 @@ function renderBadge(parent: HTMLElement, type: NoteType): HTMLElement {
   return badge;
 }
 
-function renderStatusPill(parent: HTMLElement, note: LogNote, ctx: CardContext, editable: boolean) {
-  if (!isTask(note) && !isDesign(note)) return;
-  const cycle = isTask(note) ? TASK_STATUSES : DESIGN_STATUSES;
-  const status = isTask(note) ? note.fm.status : (note as any).fm.status;
-  const pill = parent.createEl("span", { cls: `logbook-pill logbook-status-pill is-${status}`, text: status });
-  if (editable) pill.addClass("is-editable");
-  if (!editable) return;
-  pill.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    const idx = (cycle as string[]).indexOf(status);
-    const next = cycle[(idx + 1) % cycle.length];
-    (note.fm as any).status = next;
-    await ctx.store.updateFrontmatter(note.file, (fm) => (fm.status = next));
-    pill.textContent = next;
-    pill.className = `logbook-pill logbook-status-pill is-editable is-${next}`;
-  });
+/**
+ * The type's filterable-property pill (design.md §2, §4): task/design's `status`
+ * filters when collapsed but cycles-and-saves when expanded; meeting's `subtype`
+ * always filters, in either state, and is never editable. Reused as a single DOM
+ * node relocated between the collapsed top row and the expanded field block, so
+ * its click behavior is read from `card`'s current `is-expanded` class at click
+ * time rather than baked in at render time.
+ */
+function renderFilterAttrPill(parent: HTMLElement, note: LogNote, ctx: CardContext, card: HTMLElement) {
+  const typeInfo = NOTE_TYPES[note.fm.type];
+  if (!typeInfo.filterAttr) return;
+  const { key } = typeInfo.filterAttr;
+
+  if (isMeeting(note)) {
+    const value = note.fm.subtype;
+    const pill = parent.createEl("span", {
+      cls: `logbook-pill logbook-filter-attr-pill logbook-subtype-pill is-${value}`,
+      text: value,
+    });
+    pill.addEventListener("click", (e) => {
+      e.stopPropagation();
+      ctx.onFilterType(note.fm.type, { key, value });
+    });
+    return;
+  }
+
+  if (isTask(note) || isDesign(note)) {
+    const cycle = isTask(note) ? TASK_STATUSES : DESIGN_STATUSES;
+    let status: string = note.fm.status;
+    const pill = parent.createEl("span", {
+      cls: `logbook-pill logbook-filter-attr-pill logbook-status-pill is-${status}`,
+      text: status,
+    });
+    pill.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!card.hasClass("is-expanded")) {
+        ctx.onFilterType(note.fm.type, { key, value: status });
+        return;
+      }
+      const idx = (cycle as string[]).indexOf(status);
+      status = cycle[(idx + 1) % cycle.length];
+      (note.fm as any).status = status;
+      await ctx.store.updateFrontmatter(note.file, (fm) => (fm.status = status));
+      pill.textContent = status;
+      pill.className = `logbook-pill logbook-filter-attr-pill logbook-status-pill is-${status}`;
+    });
+  }
 }
 
 function renderTypeFields(
@@ -230,12 +278,6 @@ function renderTypeFields(
   ctx: CardContext,
   revertFns: (() => void)[]
 ) {
-  if (isTask(note) || isDesign(note)) {
-    const row = container.createDiv("logbook-field-row");
-    row.createEl("label", { text: "Status" });
-    renderStatusPill(row, note, ctx, true);
-  }
-
   if (isMeeting(note)) {
     const themeRow = container.createDiv("logbook-field-row");
     themeRow.createEl("label", { text: "Theme" });

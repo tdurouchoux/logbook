@@ -32,14 +32,13 @@ export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
     label: "Meeting",
     color: "#5b8db8",
     desc: "Notes from a conversation",
-    filterAttr: { key: "theme", label: "Theme" },
+    filterAttr: { key: "subtype", label: "Subtype" },
   },
   thoughts: { label: "Thoughts", color: "#8a5cb2", desc: "Exploration of an idea" },
   knowledge: {
     label: "Knowledge",
     color: "#7a9956",
     desc: "Something worth remembering",
-    filterAttr: { key: "techStack", label: "Tech" },
   },
   design: {
     label: "Design",
@@ -51,6 +50,7 @@ export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
 
 export const TASK_STATUSES: TaskStatus[] = ["todo", "done", "suspended"];
 export const DESIGN_STATUSES: DesignStatus[] = ["exploring", "in-review", "decided"];
+export const MEETING_SUBTYPES: MeetingSubtype[] = ["standalone", "recurring"];
 
 export const ALL_COMMANDS = (Object.entries(NOTE_TYPES) as [NoteType, NoteTypeConfig][]).map(
   ([key, cfg]) => ({ key, ...cfg })

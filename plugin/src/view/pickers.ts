@@ -1,3 +1,5 @@
+import { setIcon } from "obsidian";
+
 /**
  * Reusable chip + autocomplete picker for tags/projects/teams. Renders current
  * values as removable chips plus a free-text input (hidden via CSS unless the
@@ -9,6 +11,7 @@ export interface PickerOptions {
   placeholder: string;
   chipClass: string;
   prefix?: string; // e.g. "#" for tags
+  icon?: string; // Lucide icon id rendered before each chip's label, via setIcon()
   onChange: (next: string[]) => void | Promise<void>;
 }
 
@@ -20,7 +23,8 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
 
     for (const v of values) {
       const chip = container.createEl("span", { cls: opts.chipClass });
-      chip.createEl("span", { text: opts.prefix ? `${opts.prefix}${v}` : v });
+      if (opts.icon) setIcon(chip.createSpan({ cls: "logbook-pill-icon" }), opts.icon);
+      chip.createEl("span", { cls: "logbook-pill-label", text: opts.prefix ? `${opts.prefix}${v}` : v });
       const x = chip.createEl("button", { cls: "logbook-chip-remove", text: "×" });
       x.addEventListener("click", async (e) => {
         e.stopPropagation();

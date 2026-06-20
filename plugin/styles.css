@@ -92,7 +92,7 @@
     gap: 6px;
     margin-bottom: 6px;
 }
-/* Badge left, project-row takes flex:1 middle, chevron + time right */
+/* Badge left, pills-row takes flex:1 middle, chevron + time right */
 
 .logbook-time {
     font-size: 11px;
@@ -223,16 +223,42 @@
     margin: 10px 0 12px;
 }
 
-/* ── Project row (inline in card-top) ────────────────────────────────────── */
-
-/* Flex spacer between badge and chevron */
-.logbook-project-row {
-    flex: 1;
+/* ── Pills row (filterable-attribute pill + project/team pills) ─────────── */
+/* Lives inline in card-top while collapsed (flex spacer between badge and
+   chevron) and is relocated into the expanded field block by card.ts — same
+   element, no extra rule needed for that context since it's no longer a flex
+   child of card-top there. */
+.logbook-pills-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px;
     min-width: 0;
+}
+.logbook-card-top > .logbook-pills-row {
+    flex: 1;
+}
+.logbook-card-expand-inner > .logbook-pills-row {
+    margin-bottom: 10px;
+}
+
+.logbook-pill-icon {
+    display: inline-flex;
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+}
+.logbook-pill-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.logbook-project-row,
+.logbook-team-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
 }
 
 .logbook-project-chip {
@@ -245,10 +271,10 @@
     white-space: nowrap;
     flex-shrink: 0;
 }
-.logbook-project-chip > span:first-child {
+.logbook-project-chip .logbook-pill-label {
     cursor: pointer;
 }
-.logbook-project-chip > span:first-child:hover {
+.logbook-project-chip .logbook-pill-label:hover {
     text-decoration: underline;
 }
 
@@ -285,7 +311,8 @@
     display: none;
 }
 /* Tighten chip padding when × is hidden */
-.logbook-card:not(.is-expanded) .logbook-project-chip {
+.logbook-card:not(.is-expanded) .logbook-project-chip,
+.logbook-card:not(.is-expanded) .logbook-team-chip {
     padding-right: 9px;
 }
 
@@ -510,9 +537,11 @@
     font-style: italic;
 }
 
-/* ── Status pill ─────────────────────────────────────────────────────────── */
-
-.logbook-status-pill {
+/* ── Filterable-attribute pill (status / subtype) ───────────────────────── */
+/* Shared base for the type's filterable-property pill (design.md §2, §4).
+   Always clickable: status filters when collapsed, cycles when expanded;
+   subtype always filters, never edits — see renderFilterAttrPill in card.ts. */
+.logbook-filter-attr-pill {
     font-size: 10.5px;
     font-weight: 600;
     text-transform: capitalize;
@@ -520,9 +549,13 @@
     background: var(--background-modifier-hover);
     color: var(--text-muted);
     flex-shrink: 0;
-    cursor: default;
+    cursor: pointer;
 }
-/* Color-code by status so the pill's meaning reads at a glance. */
+.logbook-filter-attr-pill:hover {
+    filter: brightness(1.12);
+}
+
+/* Color-code task/design status by value so its meaning reads at a glance. */
 .logbook-status-pill.is-done,
 .logbook-status-pill.is-decided {
     color: var(--color-green, var(--text-muted));
@@ -538,11 +571,12 @@
     color: var(--color-yellow, var(--text-muted));
     background: color-mix(in srgb, var(--color-yellow, var(--text-muted)) 16%, transparent);
 }
-.logbook-status-pill.is-editable {
-    cursor: pointer;
-}
-.logbook-status-pill.is-editable:hover {
-    filter: brightness(1.12);
+
+/* Meeting subtype: tie to the card's own type color rather than a semantic
+   status color, since standalone/recurring isn't a progression like status. */
+.logbook-subtype-pill.is-recurring {
+    color: var(--card-type-color, var(--text-muted));
+    background: color-mix(in srgb, var(--card-type-color, var(--text-muted)) 16%, transparent);
 }
 
 .logbook-card.is-done .logbook-title {
@@ -641,20 +675,7 @@
     border-bottom-color: var(--interactive-accent);
 }
 
-/* ── Team / tag pickers (expanded footer area) ──────────────────────────── */
-
-.logbook-pickers-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 4px;
-}
-.logbook-team-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
-}
+/* ── Team / tag chips (attendee/stack pickers, expanded footer area) ────── */
 
 .logbook-team-chip,
 .logbook-attendee-chip,
@@ -673,6 +694,12 @@
     font-style: italic;
     color: var(--color-purple, var(--text-muted));
     background: color-mix(in srgb, var(--color-purple, var(--text-muted)) 14%, transparent);
+}
+.logbook-team-chip .logbook-pill-label {
+    cursor: pointer;
+}
+.logbook-team-chip .logbook-pill-label:hover {
+    text-decoration: underline;
 }
 /* Attendees/stack only ever render on meeting/knowledge cards respectively,
    so tying them to --card-type-color keeps every pill on a card visually
@@ -761,12 +788,11 @@
 /* ── Collapse mode ───────────────────────────────────────────────────────── */
 
 .logbook-view.is-collapse-mode .logbook-card-preview-wrap,
-.logbook-view.is-collapse-mode .logbook-project-row,
+.logbook-view.is-collapse-mode .logbook-pills-row,
 .logbook-view.is-collapse-mode .logbook-time,
 .logbook-view.is-collapse-mode .logbook-occurrence-info,
 .logbook-view.is-collapse-mode .logbook-question,
-.logbook-view.is-collapse-mode .logbook-chevron,
-.logbook-view.is-collapse-mode .logbook-status-pill {
+.logbook-view.is-collapse-mode .logbook-chevron {
     display: none;
 }
 .logbook-view.is-collapse-mode .logbook-card {

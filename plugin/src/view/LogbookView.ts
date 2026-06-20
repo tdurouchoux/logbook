@@ -1,7 +1,7 @@
 import { ItemView, MarkdownView, TFile, WorkspaceLeaf } from "obsidian";
 import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
-import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, activityTimestamp } from "../types";
+import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_SUBTYPES, activityTimestamp } from "../types";
 import { FilterState, applyFilters, emptyFilters, hasActiveFilters } from "../filters";
 import { renderFeed } from "./feed";
 import { CardContext } from "./card";
@@ -130,16 +130,11 @@ export class LogbookView extends ItemView {
     return [...new Set(this.allNotes.flatMap(pick))].sort();
   }
 
-  /** Values for a type's filterAttr (design.md §12 /type two-step flow): fixed enums for task/design, observed values for meeting/knowledge. */
+  /** Values for a type's filterAttr (design.md §12 /type two-step flow): all three are closed enums. */
   private typeAttrValues(type: NoteType): string[] {
     if (type === "task") return TASK_STATUSES;
     if (type === "design") return DESIGN_STATUSES;
-    if (type === "meeting") {
-      return this.collectPool((n) => (n.fm.type === "meeting" && n.fm.theme ? [n.fm.theme] : []));
-    }
-    if (type === "knowledge") {
-      return this.collectPool((n) => (n.fm.type === "knowledge" ? n.fm.techStack : []));
-    }
+    if (type === "meeting") return MEETING_SUBTYPES;
     return [];
   }
 
@@ -199,9 +194,9 @@ export class LogbookView extends ItemView {
       searchQuery: this.filters.query,
       onFilterProject: (p) => this.addFilterValue("projects", p),
       onFilterTeam: (t) => this.addFilterValue("teams", t),
-      onFilterType: (type) => {
+      onFilterType: (type, attr) => {
         this.filters.type = type;
-        this.filters.typeAttr = null;
+        this.filters.typeAttr = attr ?? null;
         this.afterFilterChange();
       },
     };
