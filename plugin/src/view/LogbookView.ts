@@ -205,6 +205,13 @@ export class LogbookView extends ItemView {
         // and its pillsRow node isn't left stranded in the expanded DOM position.
         if (prevClose) void prevClose();
       },
+      // For a card that's already expanded when it first renders (e.g. right after
+      // creation, where expandedPath is set directly rather than via expand() above)
+      // — registers its close handler without disturbing expandedPath/frozenTimestamp
+      // or force-closing anything, so Mod+Enter and cross-card switches still save it.
+      registerCloseHandler: (path, onForceClose) => {
+        if (this.expandedPath === path) this.activeCloseHandler = onForceClose;
+      },
       collapse: (path) => {
         if (this.expandedPath === path) {
           this.expandedPath = null;

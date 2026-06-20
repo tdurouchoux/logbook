@@ -21,6 +21,7 @@ export interface CardContext {
   store: NoteStore;
   isExpanded(path: string): boolean;
   expand(path: string, onForceClose: () => void | Promise<void>): void;
+  registerCloseHandler(path: string, onForceClose: () => void | Promise<void>): void;
   collapse(path: string): void;
   discardEdits(path: string): void;
   pools: { projects(): string[]; teams(): string[]; templates(): string[] };
@@ -227,9 +228,15 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     titleInput.focus();
     void ctx.app.workspace.openLinkText(note.file.path, "", false);
   };
-  // A card can be rendered already-expanded (e.g. right after creation) —
-  // match pillsRow's location to that initial state.
-  if (isExpanded) expandInner.insertBefore(pillsRow, typeFieldsEl);
+  // A card can be rendered already-expanded without ever going through expand()
+  // above — e.g. right after creation, where LogbookView sets expandedPath
+  // directly. Match pillsRow's location to that initial state, and register
+  // this card's own closeAndSave so Mod+Enter / switching to another card
+  // still commits and collapses it instead of silently doing nothing.
+  if (isExpanded) {
+    expandInner.insertBefore(pillsRow, typeFieldsEl);
+    ctx.registerCloseHandler(note.file.path, closeAndSave);
+  }
 
   header.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("input, button, .logbook-pill, .logbook-badge")) return;
