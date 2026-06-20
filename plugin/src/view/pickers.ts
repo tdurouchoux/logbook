@@ -2,8 +2,9 @@ import { setIcon } from "obsidian";
 
 /**
  * Reusable chip + autocomplete picker for tags/projects/teams. Renders current
- * values as removable chips plus a free-text input (hidden via CSS unless the
- * owning card is expanded) with autocomplete from a candidate pool.
+ * values as removable chips plus a "+" button (hidden via CSS unless the
+ * owning card is expanded); clicking it reveals a free-text input with
+ * autocomplete from a candidate pool, closing back to "+" on blur.
  */
 export interface PickerOptions {
   values: string[];
@@ -17,8 +18,9 @@ export interface PickerOptions {
 
 export function renderPicker(container: HTMLElement, opts: PickerOptions) {
   container.addEventListener("click", (e) => e.stopPropagation());
+  const label = opts.placeholder.replace(/^\+\s*/, "");
 
-  const render = (values: string[]) => {
+  const render = (values: string[], keepOpen = false) => {
     container.empty();
 
     for (const v of values) {
@@ -34,10 +36,16 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
       });
     }
 
+    const addBtn = container.createEl("button", {
+      cls: "logbook-picker-add-btn",
+      attr: { type: "button", "aria-label": `Add ${label}` },
+    });
+    setIcon(addBtn, "plus");
+
     const inputWrap = container.createDiv("logbook-picker-input-wrap");
     const input = inputWrap.createEl("input", {
       cls: "logbook-picker-input",
-      attr: { type: "text", placeholder: opts.placeholder, spellcheck: "false" },
+      attr: { type: "text", placeholder: label, spellcheck: "false" },
     });
     const suggestEl = inputWrap.createDiv("logbook-picker-suggestions");
     suggestEl.style.display = "none";
@@ -45,6 +53,24 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
     let filtered: string[] = [];
     let suggestIdx = 0;
     let pickingFromList = false;
+
+    const open = () => {
+      addBtn.addClass("is-hidden");
+      inputWrap.addClass("is-open");
+      input.focus();
+    };
+    const close = () => {
+      addBtn.removeClass("is-hidden");
+      inputWrap.removeClass("is-open");
+      input.value = "";
+      suggestEl.style.display = "none";
+    };
+    if (keepOpen) open();
+
+    addBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      open();
+    });
 
     const renderSuggestions = () => {
       suggestEl.empty();
@@ -74,10 +100,8 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
       pickingFromList = false;
       if (!name || values.includes(name)) return;
       const updated = [...values, name];
-      input.value = "";
-      suggestEl.style.display = "none";
       await opts.onChange(updated);
-      render(updated);
+      render(updated, true);
     };
 
     input.addEventListener("input", () => {
@@ -108,16 +132,15 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
         e.stopPropagation();
         const updated = values.slice(0, -1);
         await opts.onChange(updated);
-        render(updated);
+        render(updated, true);
       } else if (e.key === "Escape") {
         e.stopPropagation();
-        input.value = "";
-        suggestEl.style.display = "none";
+        input.blur();
       }
     });
 
     input.addEventListener("blur", () => {
-      if (!pickingFromList) suggestEl.style.display = "none";
+      if (!pickingFromList) close();
     });
   };
 

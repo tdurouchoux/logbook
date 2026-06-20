@@ -53,12 +53,18 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
 
   // Filterable-property pill + project/team pills: live in the top row while
   // collapsed, and relocate into the field block once expanded (design.md §4)
-  // — same DOM nodes either way, just moved between containers below.
+  // — same DOM nodes either way, just moved between containers below. Each
+  // gets its own "line" (label + content) once expanded; while collapsed the
+  // lines collapse back into one flowing row (see .logbook-pill-line CSS).
   const pillsRow = top.createDiv("logbook-pills-row");
 
-  renderFilterAttrPill(pillsRow, note, ctx, card);
+  if (typeInfo.filterAttr) {
+    const filterLine = renderPillLine(pillsRow, typeInfo.filterAttr.label);
+    renderFilterAttrPill(filterLine, note, ctx, card);
+  }
 
-  const projectRow = pillsRow.createDiv("logbook-project-row");
+  const projectLine = renderPillLine(pillsRow, "Projects");
+  const projectRow = projectLine.createDiv("logbook-project-row");
   renderPicker(projectRow, {
     values: note.fm.projects,
     pool: ctx.pools.projects,
@@ -78,7 +84,8 @@ export function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext)
     });
   });
 
-  const teamRow = pillsRow.createDiv("logbook-team-row");
+  const teamLine = renderPillLine(pillsRow, "Teams");
+  const teamRow = teamLine.createDiv("logbook-team-row");
   renderPicker(teamRow, {
     values: note.fm.teams,
     pool: ctx.pools.teams,
@@ -216,6 +223,18 @@ function renderBadge(parent: HTMLElement, type: NoteType): HTMLElement {
   dot.style.background = typeInfo.color;
   badge.createSpan({ text: typeInfo.label.toUpperCase() });
   return badge;
+}
+
+/**
+ * A single "pill line" inside `pillsRow`: a label + its content. While the card
+ * is collapsed, the label is hidden and the line collapses into the flowing
+ * top-row layout (see .logbook-pill-line in styles.css); while expanded, each
+ * line renders as its own row with the label to the left (design.md §4).
+ */
+function renderPillLine(parent: HTMLElement, label: string): HTMLElement {
+  const line = parent.createDiv("logbook-pill-line");
+  line.createEl("span", { cls: "logbook-pill-line-label", text: label });
+  return line;
 }
 
 /**

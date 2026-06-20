@@ -139,7 +139,9 @@ First click (anywhere except a top-row pill) expands the card in place **and sim
 ```
 [badge]                                       [△] [2h]
 Note title (editable)
-[filter-pill] [💼 proj1 ×] [👤 team1 ×] [+ project] [+ team]
+Status     [filter-pill]
+Projects   [💼 proj1 ×] [+]
+Teams      [👤 team1 ×] [+]
 other type-specific fields…
 ⌘↵ save / esc collapse
 ```
@@ -147,8 +149,8 @@ other type-specific fields…
 - Top left: type badge only — the filterable-property pill and the project/team pills move down into the field block below, since they're editable there now.
 - Top right: unchanged from collapsed — chevron (now rotated/open) and the note's age.
 - Middle: the title (now an editable input), followed by every additional field:
-  - The filterable-property pill, project pills, and team pills render as pills here too, but their behavior on click now depends on the field:
-    - **Project and team pills:** clicking the pill itself (not its `×`) still applies it as a filter, same as collapsed. The `×` removes the value; a `+ project`/`+ team` affordance opens a free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
+  - The filterable-property pill, project pills, and team pills each get their own line, with the pill type's name as a label on the left (`Status`/`Subtype`, `Projects`, `Teams`) — the same label-on-the-left layout as the other type-specific fields below them. Their behavior on click depends on the field:
+    - **Project and team pills:** clicking the pill itself (not its `×`) still applies it as a filter, same as collapsed. The `×` removes the value; a small **`+`** button at the end of the line is the only add affordance — clicking it reveals a free-text input (autofocused) with autocomplete, `Enter`/`,` to add (the input stays open afterward so several values can be added in a row), `Backspace` on an empty input removes the last value, and it collapses back to `+` on blur or `Esc`.
     - **Task/design's `status` pill:** no longer filters while expanded — clicking it instead cycles to the next status (`todo → done → suspended → todo`, or `exploring → in-review → decided → exploring`) and saves immediately. There's no `×` or removal — every task/design note always has a status.
     - **Meeting's `subtype` pill:** stays read-only/filter-only even while expanded — clicking it applies the subtype filter, exactly as collapsed. There's no edit affordance, since a meeting can't be converted between standalone and recurring after creation.
   - Remaining type-specific fields with no pill treatment — thoughts' `question`/`landed`, meeting's `theme`/`attendees`, knowledge's `techStack` (not filterable, see §2) — are plain labeled inputs/pickers, not pills, and carry no filter-on-click behavior.

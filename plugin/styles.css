@@ -239,7 +239,35 @@
     flex: 1;
 }
 .logbook-card-expand-inner > .logbook-pills-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
     margin-bottom: 10px;
+}
+
+/* Each pill type (filter-attribute / projects / teams) is one "line". While
+   collapsed it has no box of its own — display:contents flattens it into the
+   flowing top-row layout, label hidden, identical to before this existed.
+   While expanded it becomes its own row with the label to the left, mirroring
+   .logbook-field-row below it. */
+.logbook-pill-line {
+    display: contents;
+}
+.logbook-pill-line-label {
+    display: none;
+}
+.logbook-card-expand-inner .logbook-pill-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.logbook-card-expand-inner .logbook-pill-line-label {
+    display: inline-block;
+    font-size: 11px;
+    color: var(--text-faint);
+    width: 78px;
+    flex-shrink: 0;
 }
 
 .logbook-pill-icon {
@@ -316,22 +344,48 @@
     padding-right: 9px;
 }
 
-/* Add-project input — hidden when card is collapsed */
+/* "+" add affordance and the input it reveals — both hidden when collapsed. */
+.logbook-card:not(.is-expanded) .logbook-picker-add-btn,
 .logbook-card:not(.is-expanded) .logbook-picker-input-wrap {
+    display: none !important;
+}
+
+.logbook-picker-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1px dashed var(--background-modifier-border);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease;
+}
+.logbook-picker-add-btn svg {
+    width: 11px;
+    height: 11px;
+}
+.logbook-picker-add-btn:hover {
+    border-color: var(--interactive-accent);
+    color: var(--interactive-accent);
+}
+.logbook-picker-add-btn.is-hidden {
     display: none;
 }
 
 .logbook-picker-input-wrap {
     position: relative;
-    display: inline-flex;
+    display: none;
     border-radius: 999px;
-    border: 1px dashed var(--background-modifier-border);
-    transition: border-color 0.12s ease, background-color 0.12s ease;
-}
-.logbook-picker-input-wrap:has(.logbook-picker-input:focus) {
-    border-color: var(--interactive-accent);
-    border-style: solid;
+    border: 1px solid var(--interactive-accent);
     background: var(--background-modifier-hover);
+}
+.logbook-picker-input-wrap.is-open {
+    display: inline-flex;
 }
 
 .logbook-picker-input {
@@ -340,7 +394,7 @@
     color: var(--text-normal);
     font-size: 11px;
     outline: none;
-    width: 72px;
+    width: 88px;
     padding: 2px 9px;
 }
 .logbook-picker-input::placeholder {
