@@ -72,10 +72,10 @@ Tags are not a plugin-managed field. A note may or may not carry a `tags` frontm
 | Type | Additional filterable attribute |
 |---|---|
 | Task | `status` |
-| Meeting | `theme` |
-| Knowledge | `techStack` |
+| Meeting | `subtype` |
 | Design | `status` |
 | Thoughts | *(none)* |
+| Knowledge | *(none)* |
 | Draft | *(none)* |
 
 ---
@@ -120,30 +120,45 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 ### Collapsed (default)
 
 ```
-[badge] [proj1] [proj2] [+ project]          [▽] [2h]
+[badge] [filter-pill] [💼 proj1] [💼 proj2] [👤 team1]      [▽] [2h]
 Note title
 Body preview — 2 lines, plain text…
 ```
 
-- Type badge: colored dot + uppercase label.
-- Status pill (tasks, design notes only): read-only here.
-- Project chips inline in the top row; edit affordances (× buttons, add input) only appear once expanded.
+- Top row, left to right: the type badge, then — if the type has one (see §2) — its filterable-property pill (`status` for task/design, `subtype` for meeting), then a project pill per value (briefcase icon) and a team pill per value (people icon). Any of these the note doesn't have is simply absent from the row; nothing reserves space for it.
+- Top right: the chevron (closed state) and the note's "age" — a relative-time pill (`2h`, `3d`, …).
+- Middle: the title.
+- Bottom: the same 2-line plain-text body preview as the expanded card (see §6).
 - `done` tasks render with the title struck through and the card dimmed; `suspended` tasks dimmed further.
-- Clicking anywhere on the card expands it. Clicking a project chip, team chip, or the type badge instead applies that as a filter (see §8) without expanding the card.
+- **Clicking any pill in the top row (badge, filterable-property pill, project pill, team pill) applies it as a filter (see §8) — it never expands the card.** Clicking anywhere else on the card (title, preview, top-right area) expands it.
 
 ### Expanded
 
-First click expands the card in place. The card never renders the full body — that's deliberately out of scope (see "Opening in Obsidian's editor" below); the same short, plain-text preview from the collapsed state stays visible. Expanding only adds editable frontmatter affordances around it:
+First click (anywhere except a top-row pill) expands the card in place. The card never renders the full body — that's deliberately out of scope (see "Opening in Obsidian's editor" below); the same short, plain-text preview from the collapsed state stays visible.
 
-- Chevron rotates.
-- Title becomes an editable input.
-- Project/team pickers become editable inline: chips with ×, free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
-- Type-specific fields become editable inline: task/design status pill (click cycles to the next status and saves immediately), thoughts' `question`/`landed`, knowledge's `techStack`, meeting's `theme`/`attendees`.
+```
+[badge]                                       [△] [2h]
+Note title (editable)
+[filter-pill] [💼 proj1 ×] [👤 team1 ×] [+ project] [+ team]
+other type-specific fields…
+Body preview — 2 lines, plain text…
+⌘↵ save / esc collapse                  Open note →
+```
+
+- Top left: type badge only — the filterable-property pill and the project/team pills move down into the field block below, since they're editable there now.
+- Top right: unchanged from collapsed — chevron (now rotated/open) and the note's age.
+- Middle: the title (now an editable input), followed by every additional field:
+  - The filterable-property pill, project pills, and team pills render as pills here too, but their behavior on click now depends on the field:
+    - **Project and team pills:** clicking the pill itself (not its `×`) still applies it as a filter, same as collapsed. The `×` removes the value; a `+ project`/`+ team` affordance opens a free-text input with autocomplete, `Enter`/`,` to add, `Backspace` on an empty input removes the last value.
+    - **Task/design's `status` pill:** no longer filters while expanded — clicking it instead cycles to the next status (`todo → done → suspended → todo`, or `exploring → in-review → decided → exploring`) and saves immediately. There's no `×` or removal — every task/design note always has a status.
+    - **Meeting's `subtype` pill:** stays read-only/filter-only even while expanded — clicking it applies the subtype filter, exactly as collapsed. There's no edit affordance, since a meeting can't be converted between standalone and recurring after creation.
+  - Remaining type-specific fields with no pill treatment — thoughts' `question`/`landed`, meeting's `theme`/`attendees`, knowledge's `techStack` (not filterable, see §2) — are plain labeled inputs/pickers, not pills, and carry no filter-on-click behavior.
+- Bottom: the same 2-line preview as collapsed.
 - Footer: hint text (`⌘↵ save / esc collapse`) and an **"Open note →"** button.
 - `⌘↵` saves and collapses; `Esc` discards unsaved changes and collapses. Edits otherwise autosave 600 ms after typing settles, via `processFrontMatter` — there's no body write path from the expanded card at all.
 - No `updatedAt` bump to manage: any of these frontmatter writes updates `file.stat.mtime` automatically, which is what reorders the feed (see §2, §3) — but not while this card is the one expanded (see §3's stable-position rule).
 
-Second click on the card (outside an input) collapses it. Expanding a different card collapses whichever was open.
+Second click on the card (outside an input or a filtering pill) collapses it. Expanding a different card collapses whichever was open.
 
 ### Opening in Obsidian's editor
 
@@ -168,14 +183,14 @@ An action with a state.
 - `status`: `todo`, `done`, or `suspended`.
 - Badge color: amber.
 - Created the same way as any other note type: inline at the bottom of the feed, via the `/task` (status `todo`) or `/done` (status `done`, for logging things already finished) commands.
-- Status pill: read-only on the collapsed card; in the expanded card, clicking it cycles `todo → done → suspended → todo` and saves immediately.
+- Status pill: on the collapsed card, clicking it applies a status filter (see §4, §8); in the expanded card, clicking it instead cycles `todo → done → suspended → todo` and saves immediately.
 - `done` tasks: title struck through, card dimmed. `suspended` tasks: dimmed further.
 
 ### 5.3 Meeting
 
 Notes from a conversation.
 
-Common fields: `theme` (filterable), `attendees[]` (first names, shown inline on the card).
+Common fields: `theme` (plain field, not filterable), `attendees[]` (first names, shown inline on the card).
 
 #### Standalone
 
@@ -184,6 +199,8 @@ Common fields: `theme` (filterable), `attendees[]` (first names, shown inline on
 #### Recurring
 
 - `subtype: recurring`. Each occurrence is stored as a second-level heading (`## 2025-05-14`, ISO date) inside the single file's body, most recent first. `occurrences[]` in frontmatter mirrors those dates for fast indexing, but the `##` headings in the body are the canonical structure.
+
+`subtype` is the meeting type's filterable attribute (see §2, §4): it renders as a pill on every meeting card, clicking it always applies a `subtype` filter — collapsed or expanded — and it's never editable from the card, since a meeting can't be converted between standalone and recurring after creation.
 - Card subtype indicator: `N occurrences`, plus the date of the latest one.
 - There is no inline occurrence UI on the card — expanding it shows the same short preview like any other note (see §4); the full history of occurrences is only visible by opening the note in Obsidian's editor. Adding today's occurrence is a command, not a feed interaction: see **`/occurrence`** in §7.
 
@@ -206,7 +223,7 @@ An exploration of an idea or question.
 
 Something worth remembering — a fact, snippet, quote, definition.
 
-- `techStack[]` — optional list of technologies/concepts, filterable. Card shows a small uppercase `STACK` label alongside it.
+- `techStack[]` — optional list of technologies/concepts. Card shows a small uppercase `STACK` label alongside it. Not a filterable attribute for now (see §2) — no header pill, no filter-on-click.
 - Badge color: moss green.
 
 ### 5.6 Design
@@ -266,7 +283,7 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 |---|---|
 | `/project [name]` | Filter by project; autocompletes from existing projects |
 | `/team [name]` | Filter by team; autocompletes from existing teams |
-| `/type [type]` | Filter by note type; autocompletes the six types. Selecting a type with a sub-attribute (task/design → status, meeting → theme, knowledge → techStack) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
+| `/type [type]` | Filter by note type; autocompletes the six types. Selecting a type with a sub-attribute (task/design → status, meeting → subtype) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
 
 **Other:**
 
@@ -292,7 +309,7 @@ Tags are not a filter axis here — filtering by tag is Obsidian's own search/ta
 
 ### Filter chips
 
-Active filters appear as chips inside the command bar, to the left of the input: a folder-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
+Active filters appear as chips inside the command bar, to the left of the input: a briefcase-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
 
 ### Removing filters
 
@@ -302,8 +319,12 @@ Active filters appear as chips inside the command bar, to the left of the input:
 
 ### Clicking things
 
-- Clicking a project or team chip on a card adds it as an active project/team filter.
-- Clicking a type badge on a card sets it as the active type filter.
+Clicking a pill on a card almost always filters — the one exception is task/design's `status` pill on an *expanded* card, which edits instead. Specifically:
+
+- **Project or team pill:** clicking it adds it as an active project/team filter — on both collapsed and expanded cards.
+- **Type badge:** clicking it sets it as the active type filter — on both collapsed and expanded cards.
+- **Filterable-property pill, collapsed card** (task/design's `status`, meeting's `subtype`): clicking it applies that value as a filter.
+- **Filterable-property pill, expanded card:** behavior depends on the type. Meeting's `subtype` pill still filters, same as collapsed — it has no edit affordance. Task/design's `status` pill instead cycles to the next status and saves immediately (see §4, §5.2) — it does not filter while the card is expanded.
 
 This is the primary way users discover filtering — no query syntax to learn, just click.
 
@@ -322,7 +343,7 @@ A note can belong to multiple projects and multiple teams; `projects[]`/`teams[]
 - Free-form, lowercase, hyphenated.
 - Visible as chips on collapsed cards and as inline pickers on expanded cards.
 - Picker: click opens a text input with autocomplete from existing values; type freely, `Enter` adds, `Backspace` on empty removes the last value.
-- Visual distinction: lab-icon chip for projects, people-icon chip for teams — team chips set in italic to reinforce "who" vs. "what".
+- Visual distinction: briefcase-icon chip for projects, people-icon chip for teams — team chips set in italic to reinforce "who" vs. "what".
 
 ---
 
@@ -381,8 +402,8 @@ Inside any project/team input:
 ## 14. Quick visual vocabulary
 
 - **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), muted plum (thoughts), moss green (knowledge), dusty violet (design).
-- **Status pill** — tasks and design notes only. Read-only on the collapsed card; editable (click to cycle) on the expanded card.
-- **Project chip** — lab icon + value, background-tinted; multiple per note.
+- **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `subtype` for meeting. Click behavior differs by type: `status` filters when the card is collapsed but cycles/edits when expanded; `subtype` always filters, in either state, and is never editable from the card.
+- **Project chip** — briefcase icon + value, background-tinted; multiple per note.
 - **Team chip** — people icon + value, italicised; multiple per note.
 - **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
 - **Date dividers** — uppercase tracked-out label between two hairlines.
@@ -403,3 +424,4 @@ A consistent rule: dots and icons prefix every chip so filter context is readabl
 - **Trash, not delete** — destructive operations (draft auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting.
 - **Settings tab** — exposes the configurable logbook folder path (default `logbook/`).
 - **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
+- **Icons** — project (briefcase) and team (people) pill icons use Obsidian's built-in `setIcon()` API against the Lucide icon set, the same mechanism the collapse-mode title-bar action already uses (see §10) — no custom inline SVG.

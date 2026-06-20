@@ -22,3 +22,15 @@ Tracks the gap between `design.md` and the plugin implementation (`plugin/`). Al
 - **Phase 13 — Stable position while expanded (2026-06-20).** Frontmatter-only edits (status pill, project/team changes) bump `file.stat.mtime` exactly like body edits, which was reordering the feed out from under an open card. Fixed in `LogbookView.ts`: the expanded card's sort key is frozen at the timestamp it had when expanded, and only resumes tracking live `mtime` once it collapses.
 
 Everything in the original plan is implemented, type-checked, built, and confirmed in a live vault.
+
+## Status: in progress
+
+- **Phase 14 — Card layout redesign (2026-06-20).** `design.md` §4, §5.2, §5.3, §5.5, §7, §8, §9, §14, §15 revised: collapsed cards now show the filterable-property pill and project/team pills (briefcase/people icons) in the top row, with the title moved to the middle and the 2-line body preview at the bottom; expanded cards keep only the badge top-left and move every other pill/field into the field block. Meeting's filterable attribute changes from `theme` to `subtype`; knowledge's `techStack` is no longer filterable. Steps to implement:
+  1. `types.ts` — change `NOTE_TYPES.meeting.filterAttr` from `{ key: "theme", label: "Theme" }` to `{ key: "subtype", label: "Subtype" }`; remove `NOTE_TYPES.knowledge.filterAttr` entirely.
+  2. `LogbookView.ts` — update `typeAttrValues()` for `meeting` to read `subtype` values (`standalone`/`recurring`) instead of `theme`, and drop the `knowledge`/`techStack` branch.
+  3. `card.ts` — rebuild the collapsed-card top row to render, left to right: type badge, filterable-property pill (if the type has one), a pill per project (briefcase icon via `setIcon()`), a pill per team (people icon via `setIcon()`); each pill's click applies a filter and stops propagation so it doesn't also expand the card.
+  4. `card.ts` — rebuild the expanded-card layout: top-left badge only; field block under the title renders the filterable-property pill + project/team pills (still filter-on-click, with `×`/add affordances for project/team), followed by remaining type-specific fields (`theme`, `attendees`, `question`, `landed`, `techStack`) as plain inputs with no pill/filter treatment.
+  5. `card.ts` — task/design's `status` pill: filter-on-click when collapsed, cycle-and-save-on-click when expanded (no filter while expanded). Meeting's `subtype` pill: filter-on-click in both states, never editable.
+  6. `card.ts` / CSS — add briefcase and people icons to project/team pills via Obsidian's `setIcon()`, matching the existing collapse-mode action's icon mechanism; verify pill layout doesn't overflow the card header on narrow panes.
+  7. Manual QA in a live vault: collapsed click-to-filter on every pill type; expanded status cycle vs. subtype filter-only; project/team filter-and-edit on the same pill; knowledge card shows no filterable pill for `techStack`.
+  8. `tsc -noEmit -skipLibCheck` + `node esbuild.config.mjs production`, then commit and push.
