@@ -5,7 +5,7 @@ import {
   NoteType,
   MeetingFrontmatter,
 } from "./types";
-import { generateId, slugify, todayISO } from "./utils";
+import { generateId, sanitizeFilename, todayISO } from "./utils";
 import { LogbookSettings } from "./settings";
 
 /**
@@ -106,11 +106,11 @@ export class NoteStore {
     }
 
     const title = type === "thoughts" ? titleOrQuestion || "Untitled thought" : titleOrQuestion;
-    const slug = slugify(title);
-    let path = normalizePath(`${folder}/${slug}.md`);
+    const filename = sanitizeFilename(title);
+    let path = normalizePath(`${folder}/${filename}.md`);
     let i = 1;
     while (this.app.vault.getAbstractFileByPath(path)) {
-      path = normalizePath(`${folder}/${slug}_${i++}.md`);
+      path = normalizePath(`${folder}/${filename} ${i++}.md`);
     }
 
     const now = new Date().toISOString();
@@ -222,8 +222,8 @@ export class NoteStore {
   }
 
   async renameTitle(file: TFile, newTitle: string): Promise<void> {
-    const slug = slugify(newTitle);
-    const newPath = normalizePath(`${file.parent?.path ?? this.folder}/${slug}.md`);
+    const filename = sanitizeFilename(newTitle);
+    const newPath = normalizePath(`${file.parent?.path ?? this.folder}/${filename}.md`);
     if (newPath !== file.path && !this.app.vault.getAbstractFileByPath(newPath)) {
       await this.app.fileManager.renameFile(file, newPath);
     }

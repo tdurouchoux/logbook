@@ -1,10 +1,18 @@
 import { LogNote } from "./types";
 
-export function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "") || "untitled";
+/** Cleans a title into a valid filename while keeping it human-readable — only strips
+ *  what Obsidian actually disallows in a note title (`* " \ / < > : | ?`, since the
+ *  title doubles as the file name) plus trailing dots/spaces (invalid on Windows).
+ *  No casing/whitespace changes, so the file name shown in Obsidian's editor/tab
+ *  matches what the user typed. */
+export function sanitizeFilename(title: string): string {
+  return (
+    title
+      .replace(/[*"\\/<>:|?]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[. ]+$/, "") || "Untitled"
+  );
 }
 
 export function generateId(): string {
