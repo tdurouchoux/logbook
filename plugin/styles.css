@@ -784,23 +784,39 @@
 }
 
 /* Change type / Save (design.md §4, §12) — footer order is hint, Change type,
-   Save, Delete; Delete stays the literal last/rightmost control. */
+   Save, Delete; Delete stays the literal last/rightmost control. box-sizing +
+   a shared height keep all three footer buttons (these two plus
+   .logbook-delete-btn below) pixel-aligned regardless of border/padding. */
 .logbook-type-btn,
 .logbook-save-btn {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
     flex-shrink: 0;
     font-size: 11.5px;
-    padding: 4px 10px;
+    padding: 0 10px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 5px;
     cursor: pointer;
 }
 .logbook-type-btn {
-    background: transparent;
+    background: var(--background-modifier-form-field);
     color: var(--text-muted);
 }
 .logbook-type-btn:hover {
     background: var(--background-modifier-hover);
     color: var(--text-normal);
+}
+.logbook-type-btn-chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-faint);
+}
+.logbook-type-btn-chevron svg {
+    width: 12px;
+    height: 12px;
 }
 .logbook-save-btn {
     background: var(--interactive-accent);
@@ -814,8 +830,10 @@
 
 /* Trash button, pinned to the bottom-right of the footer by .logbook-kbd-hint's
    margin-right: auto above. Two-click confirm (design.md §4): .is-armed is the
-   "click again to delete" state. */
+   "click again to delete" state. Same box-sizing/height as the two buttons
+   above so all three line up despite the border-less, square layout here. */
 .logbook-delete-btn {
+    box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -823,7 +841,7 @@
     height: 24px;
     flex-shrink: 0;
     padding: 0;
-    border: none;
+    border: 1px solid transparent;
     border-radius: 5px;
     background: transparent;
     color: var(--text-faint);

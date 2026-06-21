@@ -244,8 +244,9 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const typeBtn = expandFooter.createEl("button", {
     cls: "logbook-type-btn",
     attr: { type: "button" },
-    text: "Change type",
   });
+  typeBtn.createSpan({ text: "Change type" });
+  setIcon(typeBtn.createSpan({ cls: "logbook-type-btn-chevron" }), "chevron-down");
   typeBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     const menu = new Menu();
