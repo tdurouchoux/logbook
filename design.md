@@ -47,6 +47,7 @@ title: "Note title"
 projects: []              # free-form, lowercase-hyphenated; a note can belong to multiple
 teams: []                 # same shape as projects, but for people/groups
 createdAt: <ISO>
+pinned: true              # optional; omitted entirely when not pinned — see §3, §4
 ---
 ```
 
@@ -55,6 +56,8 @@ There is no plugin-managed `updatedAt` field. "Last activity" is read straight o
 `id` is a stable identifier minted on creation (a short random/UUID string) — filenames and titles can change without breaking anything that might reference a note by it.
 
 Tags are not a plugin-managed field. A note may or may not carry a `tags` frontmatter property — that's entirely Obsidian's own tag system (frontmatter `tags`, inline `#tags` in the body, the built-in tag pane and search). The plugin neither writes, edits, displays, nor filters by it; see §9.
+
+A note can be pinned, independent of its type — `pinned: true` in frontmatter, omitted entirely (not written as `false`) when not pinned, the same omit-when-absent convention used by the optional type-specific fields below (`theme`, `template`, `question`, `landed`). Pinning is toggled from the expanded card and changes nothing else about the note — it keeps its type, its filterability, its activity timestamp. See §3 for where pinned notes appear in the feed and §4 for the toggle itself.
 
 ### The six note types
 
@@ -89,6 +92,7 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 │  Feed (scrollable, flex:1)                │
 │  Oldest at top, newest at bottom          │
 │  Grouped by day with dividers             │
+│  Pinned section, always last              │
 ├──────────────────────────────────────────┤
 │  Dock (command bar)                       │
 └──────────────────────────────────────────┘
@@ -113,6 +117,16 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 - **No notes match the active filter(s):** a quiet message describing the filter, with a hint to type `/` in the command bar to create a matching note or to clear filters.
 - **No notes exist at all:** a friendly invitation to start writing.
 
+### Pinned section
+
+A pinned note (`pinned: true`, see §2) is pulled out of the normal day-grouped chronological list and rendered instead in a dedicated **Pinned** section at the very bottom of the feed — below every day group, the last thing in the scrollable feed before the dock. This mirrors §1's "the bottom of the view is the active surface" principle: pinned notes are exactly the ones the user wants within reach while composing, so they sit right next to the command bar — bottom is this plugin's equivalent of "first," since the whole feed already reads newest-at-the-bottom rather than newest-at-the-top.
+
+- A pinned note is removed from its day group entirely — it appears once, in the Pinned section, never duplicated.
+- Within the Pinned section, notes keep the feed's usual chronological convention (oldest at the top of the section, newest at the bottom), using the same activity timestamp as everywhere else (see "Order" above) — there's no separate "pin order." There are no day dividers inside the section; it's one flat list under a single "Pinned" divider.
+- The Pinned section is exempt from history-window pagination (see "History loading" above) — a note pinned a year ago still appears, even though a regular note that old wouldn't load until the user scrolls back that far. It's still subject to active filters/search exactly like the rest of the feed (§8) — filtering by a project hides non-matching pinned notes too, so the section never shows something the user just filtered out.
+- **Stable section while expanded:** toggling pin on an expanded card (§4) stages the change immediately, same as every other field edit — but, exactly like the stable-position rule for sort/day-group above, the card doesn't actually move between the regular feed and the Pinned section until it collapses. A card mid-edit holds its section the same way it holds its position.
+- If there are no pinned notes, the section (and its divider) doesn't render at all.
+
 ---
 
 ## 4. Note card
@@ -120,13 +134,13 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 ### Collapsed (default)
 
 ```
-[badge] [filter-pill] [💼 proj1] [💼 proj2] [👤 team1]      [▽] [2h]
+[badge] [filter-pill] [💼 proj1] [💼 proj2] [👤 team1]  [📌] [▽] [2h]
 Note title
 Body preview — 2 lines, plain text…
 ```
 
 - Top row, left to right: the type badge, then — if the type has one (see §2) — its filterable-property pill (`status` for task/design, `subtype` for meeting), then a project pill per value (briefcase icon) and a team pill per value (people icon). Any of these the note doesn't have is simply absent from the row; nothing reserves space for it.
-- Top right: the chevron (closed state) and the note's "age" — a relative-time pill (`2h`, `3d`, …). These two are pinned to the top-right corner in both collapsed and expanded state (see Expanded below) — they don't drift when the pills row between them and the badge comes and goes.
+- Top right: the chevron (closed state) and the note's "age" — a relative-time pill (`2h`, `3d`, …) — plus, only if the note is pinned, a pin glyph; absent entirely for an unpinned note, same as any other pill the note doesn't have. These are pinned to the top-right corner in both collapsed and expanded state (see Expanded below) — they don't drift when the pills row between them and the badge comes and goes. While collapsed, the pin glyph is a pure indicator, not a control — toggling pinned only happens on the expanded card (see below).
 - Middle: the title.
 - Bottom: a 2-line plain-text body preview (see §6) — shown only while collapsed; it disappears once the card expands, since expanding opens the real note in Obsidian's editor instead.
 - `done` tasks render with the title struck through and the card dimmed; `suspended` tasks dimmed further.
@@ -137,17 +151,17 @@ Body preview — 2 lines, plain text…
 First click (anywhere except a top-row pill) expands the card in place **and simultaneously opens the underlying note in Obsidian's native editor** (see "Opening in Obsidian's editor" below) — there's no separate button for it. Because the real body is now visible in the editor, the card itself drops its body preview the moment it expands; only the editable frontmatter fields remain on the card.
 
 ```
-[badge]                                       [△] [2h]
+[badge]                                       [📌] [△] [2h]
 Note title (editable)
 Status     [filter-pill]
 Projects   [💼 proj1 ×] [+]
 Teams      [👤 team1 ×] [+]
 other type-specific fields…
-⌘↵ save / esc collapse                                  [🗑]
+⌘↵ save / esc collapse          [Change type ▾]  [Save]  [🗑]
 ```
 
 - Top left: type badge only — the filterable-property pill and the project/team pills move down into the field block below, since they're editable there now.
-- Top right: unchanged from collapsed — chevron (now rotated/open) and the note's age, still pinned to the card's top-right corner even though the pills row that used to sit between them and the badge has moved down into the field block.
+- Top right: chevron (now rotated/open) and the note's age, still pinned to the card's top-right corner even though the pills row that used to sit between them and the badge has moved down into the field block — plus the pin glyph, which is the same node as in the collapsed state but is now a clickable toggle: clicking it flips the note's staged `pinned` value and swaps the glyph between filled (pinned) and outline (not pinned). Like every other field, the change is only staged here, flushed when the card closes (see below).
 - Middle: the title (now an editable input), followed by every additional field:
   - The filterable-property pill, project pills, and team pills each get their own line, with the pill type's name as a label on the left (`Status`/`Subtype`, `Projects`, `Teams`) — the same label-on-the-left layout as the other type-specific fields below them. Their behavior on click depends on the field:
     - **Project and team pills:** clicking the pill itself (not its `×`) still applies it as a filter, same as collapsed. The `×` removes the value; a small **`+`** button at the end of the line is the only add affordance — clicking it reveals a free-text input (autofocused) with autocomplete, `Enter`/`,` to add (the input stays open afterward so several values can be added in a row), `Backspace` on an empty input removes the last value, and it collapses back to `+` on blur or `Esc`.
@@ -155,9 +169,12 @@ other type-specific fields…
     - **Meeting's `subtype` pill:** stays read-only/filter-only even while expanded — clicking it applies the subtype filter, exactly as collapsed. There's no edit affordance, since a meeting can't be converted between standalone and recurring after creation.
   - Remaining type-specific fields with no pill treatment — thoughts' `question`/`landed`, meeting's `theme`/`attendees`, knowledge's `techStack` (not filterable, see §2) — are plain labeled inputs/pickers, not pills, and carry no filter-on-click behavior.
 - No body preview while expanded — see above.
-- Footer: the hint text (`⌘↵ save / esc collapse`) on the left, and a trash-bin button pinned to the bottom-right corner of the card. Clicking it **soft-deletes** the note — `app.vault.trash()`, the same never-hard-delete mechanism already used for draft auto-delete (§5.1), so it's recoverable from the vault's configured trash location. A single accidental click can't delete anything: the first click puts the button into an armed/confirming state (e.g. a red fill, for a few seconds) without doing anything yet; a second click while armed actually deletes, anything else (the timeout elapsing, or the card closing) disarms it back to the normal state. Deleting discards any staged-but-unsaved edits on that card outright — there's nothing to commit. The card itself disappears from the feed via the same vault `delete` event that already drives live refresh elsewhere (§15), not a special case.
-- **Nothing is written to disk while a field is being edited.** Every property edit — title, the filterable-property pill, project/team pills, and every type-specific field — updates the card's own UI immediately (and the in-memory note, so filtering/sorting elsewhere stays consistent) but is only staged, not saved. Staged edits are flushed to disk — as a rename (if the title changed) plus a single batched `processFrontMatter` call for everything else — the moment the card is explicitly closed: `⌘↵`, clicking elsewhere to collapse, or expanding a different card. `Esc` discards the staged edits instead of saving them: since nothing was written yet, discarding is just re-reading the note's still-unchanged frontmatter and re-rendering the card from it, then collapsing.
-- `⌘↵` works two ways, redundantly: as a global hotkey (`Mod+Enter`) that closes/saves whichever card is currently expanded regardless of which pane has focus (needed because expanding a card opens its note in Obsidian's editor and usually moves keyboard focus there), and as a `keydown` listener attached directly to every field input inside the card itself (title, every plain type-specific input, and every picker's text input) — so it also works the instant focus is still inside the card's own title or property fields, without depending on the keystroke bubbling up past a picker's own Enter-to-add handling. `Esc` is wired the same way, on both the card and every field.
+- Footer, left to right: the hint text (`⌘↵ save / esc collapse`), then a **Change type** button, then an explicit **Save** button, then a trash-bin button pinned to the bottom-right corner of the card — delete stays the absolute last/rightmost control, same as before.
+  - **Save**: identical effect to `⌘↵` — flushes every staged edit (commit, below) and collapses the card. It exists specifically because the global `Mod+Enter` hotkey depends on keyboard focus and keybinding behavior that's proven unreliable in practice (§12) — the button always works regardless of where focus is or what else is bound to that combination.
+  - **Change type**: opens a small dropdown listing the other five types, each shown with its badge color dot (the same list the `/type` command's first step uses). Picking one stages a type change exactly like any other field edit — nothing is written until the card closes (Save, `⌘↵`, click-away, or switching cards) — and `Esc` discards a staged type change the same way it discards any other staged edit. See "Changing a note's type" below for what the conversion actually does.
+  - **Delete**: clicking it **soft-deletes** the note — `app.vault.trash()`, the same never-hard-delete mechanism already used for draft auto-delete (§5.1), so it's recoverable from the vault's configured trash location. A single accidental click can't delete anything: the first click puts the button into an armed/confirming state (e.g. a red fill, for a few seconds) without doing anything yet; a second click while armed actually deletes, anything else (the timeout elapsing, or the card closing) disarms it back to the normal state. Deleting discards any staged-but-unsaved edits on that card outright — there's nothing to commit. The card itself disappears from the feed via the same vault `delete` event that already drives live refresh elsewhere (§15), not a special case.
+- **Nothing is written to disk while a field is being edited.** Every property edit — title, the filterable-property pill, project/team pills, every type-specific field, the pin toggle, and a type change — updates the card's own UI immediately (and the in-memory note, so filtering/sorting elsewhere stays consistent) but is only staged, not saved. Staged edits are flushed to disk — as a rename (if the title changed) plus a single batched `processFrontMatter` call for everything else — the moment the card is explicitly closed: `⌘↵`, the **Save** button, clicking elsewhere to collapse, or expanding a different card. `Esc` discards the staged edits instead of saving them: since nothing was written yet, discarding is just re-reading the note's still-unchanged frontmatter and re-rendering the card from it, then collapsing.
+- `⌘↵` and the footer's explicit **Save** button do the same thing and exist redundantly for the same reason: `⌘↵` works two ways — as a global hotkey (`Mod+Enter`) that closes/saves whichever card is currently expanded regardless of which pane has focus (needed because expanding a card opens its note in Obsidian's editor and usually moves keyboard focus there), and as a `keydown` listener attached directly to every field input inside the card itself (title, every plain type-specific input, and every picker's text input) — so it also works the instant focus is still inside the card's own title or property fields, without depending on the keystroke bubbling up past a picker's own Enter-to-add handling. In practice this has repeatedly proven unreliable, which is why the **Save** button exists: a plain click that always works no matter where focus landed. `Esc` is wired the same way as `⌘↵`, on both the card and every field.
 - No `updatedAt` bump to manage: the save-on-close write updates `file.stat.mtime` automatically, which is what reorders the feed (see §2, §3) — but not while this card is the one expanded (see §3's stable-position rule).
 
 Second click on the card (outside an input or a filtering pill) collapses it, saving any staged edits first. Expanding a different card closes (and saves) whichever was open, then opens the new note in the editor.
@@ -169,6 +186,19 @@ Editing the body is never done inline in the feed — only frontmatter fields (t
 For a recurring meeting, opening the note shows the whole file, including every occurrence heading, in Obsidian's editor.
 
 Creating a note from the command bar follows the same rule, since the resulting card is rendered already-expanded: the previously-expanded card (if any) is closed/saved first, exactly as if the user had clicked to expand a different card, and the new note opens in Obsidian's editor immediately.
+
+### Changing a note's type
+
+The **Change type** button in the expanded card's footer (see above) is the only way to convert a note from one type to another after creation. Clicking it opens a dropdown of the other five types; picking one stages the conversion immediately — the expanded card's type-specific fields (§5) re-render right there to match the new type, and the badge and filterable-property pill update too — but, like every other staged edit, nothing is written to disk until the card closes.
+
+Conversion rules:
+
+- Every common field (§2) — `id`, `title`, `projects`, `teams`, `createdAt`, `pinned` — is preserved unchanged.
+- Every field specific to the *old* type is dropped.
+- Every field specific to the *new* type is (re)initialized to the same default it would get from `/<type>` on a brand-new note: `status: todo` for task, `status: exploring` for design, `subtype: standalone` with empty `attendees: []` for meeting (`theme`/`template`/`occurrences` are left unset — converting *to* meeting always yields a standalone meeting, never recurring, since recurring needs the occurrence/body scaffolding §5.3 sets up at creation time), empty `techStack: []` for knowledge, `question`/`landed` left unset for thoughts, nothing extra for draft.
+- No attempt is made to map between same-named-but-different-domain fields — task's and design's `status` enums don't share values (`todo`/`done`/`suspended` vs. `exploring`/`in-review`/`decided`), so converting between them always resets to the new type's default rather than guessing an equivalent.
+- The note's body is never touched. For a recurring meeting specifically, this means converting it away leaves its `## <date>` occurrence headings sitting in the body as plain content — only the `subtype`/`occurrences`/`template` frontmatter is dropped, the headings themselves don't disappear.
+- This is a lossy operation by design — dropped fields are simply gone once the card is saved. There's no confirmation step: it's a frontmatter-only change, the note itself is never deleted, and switching back doesn't un-lose the old fields' values any more than re-running `/task` on a `/design` note ever would have.
 
 ---
 
@@ -379,6 +409,8 @@ No shortcut in the plugin is a global, app-wide single-key capture — Obsidian 
 | `↑ / ↓` | Navigate the command dropdown (when the dropdown is open) |
 | `↵` | Run the selected command, or submit the search query (when the command bar has focus) |
 
+`⌘ ↵` has a click equivalent for anyone who doesn't want to rely on the hotkey: the expanded card's footer **Save** button does the exact same thing (§4) — added because the hotkey's reliance on keyboard focus has proven unreliable in practice.
+
 The command bar itself is always visible at the bottom of the view, so opening it is just a click — no shortcut needed to summon it.
 
 Inside any project/team input:
@@ -411,6 +443,10 @@ Inside any project/team input:
 - **Team chip** — people icon + value, italicised; multiple per note.
 - **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
 - **Date dividers** — uppercase tracked-out label between two hairlines.
+- **Pinned divider** — same shape as a date divider, labeled "Pinned," always the last divider in the feed (§3).
+- **Pin glyph** — top-right corner, alongside the chevron and age pill; filled when pinned, absent entirely when not. Indicator-only while collapsed; a clickable toggle once expanded (§4).
+- **Save button** — expanded card footer; explicit equivalent of `⌘↵` (§4, §12).
+- **Change-type button** — expanded card footer; opens a dropdown of the other five types and stages a frontmatter conversion (§4).
 - **Collapse toggle** — a chevron view action in the pane's title bar; toggles title-only view.
 
 A consistent rule: dots and icons prefix every chip so filter context is readable without relying on color.
@@ -431,3 +467,5 @@ A consistent rule: dots and icons prefix every chip so filter context is readabl
 - **Settings tab** — exposes the configurable logbook folder path (default `logbook/`).
 - **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
 - **Icons** — project (briefcase) and team (people) pill icons use Obsidian's built-in `setIcon()` API against the Lucide icon set, the same mechanism the collapse-mode title-bar action already uses (see §10) — no custom inline SVG.
+- **Type-change commits replace, not merge** — every other staged edit flushes via a `dirty` key set (only the changed keys get written into the existing frontmatter object). A staged type change can't use that path: it has to delete every key belonging to the old type's shape that isn't part of the new type's shape (e.g. a task's `status` shouldn't survive becoming a meeting) and write the new type's full field set, in the same single batched `processFrontMatter` call — a full replace of the type-specific slice of frontmatter, not an incremental patch.
+- **`pinned` follows the same omit-when-absent convention** as `theme`/`template`/`question`/`landed` — written as `pinned: true` only when set, and set to `undefined` (not `false`) to unpin, so a healthy note's frontmatter never carries a stale `pinned: false`.
