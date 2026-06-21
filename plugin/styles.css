@@ -36,12 +36,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    color: var(--text-faint);
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin: 12px 0 4px;
+    margin: 22px 0 12px;
     user-select: none;
 }
 .logbook-divider::before,
@@ -49,7 +44,18 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--background-modifier-border);
+    background: var(--background-modifier-border-hover);
+}
+.logbook-divider span {
+    flex-shrink: 0;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--background-modifier-hover);
+    padding: 3px 11px;
+    border-radius: 999px;
 }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
@@ -451,19 +457,22 @@
 .logbook-input {
     width: 100%;
     box-sizing: border-box;
-    border: none;
-    border-radius: 0;
-    background: transparent;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 999px;
+    background: var(--background-secondary);
     color: var(--text-normal);
-    padding: 0 14px;
+    padding: 0 18px;
     font-size: 14px;
     height: 44px;
     outline: none;
-    box-shadow: inset 0 -1px 0 0 var(--background-modifier-border);
-    transition: box-shadow 0.15s;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
 }
 .logbook-input:focus {
-    box-shadow: inset 0 -1px 0 0 var(--interactive-accent);
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 3px
+        color-mix(in srgb, var(--interactive-accent) 16%, transparent);
 }
 .logbook-input::placeholder {
     color: var(--text-faint);
@@ -474,8 +483,11 @@
     font-family: var(--font-monospace);
     font-size: 13px;
     color: var(--interactive-accent);
-    box-shadow: inset 0 -1px 0 0
-        color-mix(in srgb, var(--interactive-accent) 50%, transparent);
+    border-color: color-mix(
+        in srgb,
+        var(--interactive-accent) 50%,
+        transparent
+    );
 }
 
 /* ── Command dropdown ────────────────────────────────────────────────────── */
@@ -836,8 +848,9 @@
     min-height: 1px;
 }
 
-.logbook-divider-pending {
+.logbook-divider-pending span {
     color: var(--interactive-accent);
+    background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
 }
 
 /* ── Collapse mode ───────────────────────────────────────────────────────── */
