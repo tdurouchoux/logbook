@@ -9,16 +9,19 @@ export interface FilterState {
   query: string;
   projects: string[];
   teams: string[];
+  tags: string[];
   type: NoteType | null;
   typeAttr: TypeAttrFilter | null;
 }
 
 export function emptyFilters(): FilterState {
-  return { query: "", projects: [], teams: [], type: null, typeAttr: null };
+  return { query: "", projects: [], teams: [], tags: [], type: null, typeAttr: null };
 }
 
 export function hasActiveFilters(f: FilterState): boolean {
-  return !!f.query || f.projects.length > 0 || f.teams.length > 0 || !!f.type || !!f.typeAttr;
+  return (
+    !!f.query || f.projects.length > 0 || f.teams.length > 0 || f.tags.length > 0 || !!f.type || !!f.typeAttr
+  );
 }
 
 function fieldsOf(note: LogNote): string[] {
@@ -64,6 +67,7 @@ export function applyFilters(notes: LogNote[], filters: FilterState): LogNote[] 
     if (filters.typeAttr && !matchesTypeAttr(n, filters.typeAttr)) return false;
     if (filters.projects.length && !filters.projects.every((p) => n.fm.projects.includes(p))) return false;
     if (filters.teams.length && !filters.teams.every((t) => n.fm.teams.includes(t))) return false;
+    if (filters.tags.length && !filters.tags.every((t) => n.tags.includes(t))) return false;
     if (!matchesQuery(n, filters.query)) return false;
     return true;
   });

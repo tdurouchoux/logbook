@@ -110,11 +110,14 @@ export type NoteFrontmatter =
   | DesignFrontmatter
   | DraftFrontmatter;
 
-/** A note loaded from the vault: frontmatter fields plus the file/body it came from. */
+/** A note loaded from the vault: frontmatter fields plus the file/body it came from.
+ *  `tags` is Obsidian's own native tag set (frontmatter `tags` + inline `#tags`,
+ *  from the metadata cache) — the plugin never writes it, only reads it for `/tag`. */
 export interface LogNote {
   file: TFile;
   body: string;
   fm: NoteFrontmatter;
+  tags: string[];
 }
 
 export function isTask(n: LogNote): n is LogNote & { fm: TaskFrontmatter } {

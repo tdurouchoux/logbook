@@ -216,7 +216,7 @@ An action with a state.
 
 - `status`: `todo`, `done`, or `suspended`.
 - Badge color: amber.
-- Created the same way as any other note type: inline at the bottom of the feed, via the `/task` (status `todo`) or `/done` (status `done`, for logging things already finished) commands.
+- Created the same way as any other note type: inline at the bottom of the feed, via the `/task` command (status `todo`).
 - Status pill: on the collapsed card, clicking it applies a status filter (see §4, §8); in the expanded card, clicking it instead cycles `todo → done → suspended → todo` and saves immediately.
 - `done` tasks: title struck through, card dimmed. `suspended` tasks: dimmed further.
 
@@ -283,7 +283,7 @@ A single input at the bottom of the view, with two modes.
 
 ### Search mode (default)
 
-- Free text is a search query: matches AND across whitespace-separated terms, checked against `title`, `body`, `projects`, `teams`, and every type-specific field. (Searching by tag is Obsidian's own job — its search pane and tag pane already do this; see §9.)
+- Free text is a search query: matches AND across whitespace-separated terms, checked against `title`, `body`, `projects`, `teams`, and every type-specific field. It does not match tags — free-text tag search is still Obsidian's own search/tag pane's job; the plugin's only tag-aware affordance is the dedicated `/tag` filter command (see §9).
 - Matches are highlighted (see §6) in card previews while the query is active.
 - When filters are active, the bar shows their chips to the left of the input (see §8).
 - Free text never creates a note — note creation only happens through `/` commands.
@@ -298,7 +298,6 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 |---|---|
 | `/draft [title]` | New draft |
 | `/task [title]` | New task, status `todo` |
-| `/done [title]` | New task, status `done` |
 | `/meeting [title]` | New standalone meeting |
 | `/recurring [title]` | New recurring meeting with one occurrence dated today |
 | `/thoughts [question]` | New thoughts note, `question` pre-filled |
@@ -317,6 +316,7 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 |---|---|
 | `/project [name]` | Filter by project; autocompletes from existing projects |
 | `/team [name]` | Filter by team; autocompletes from existing teams |
+| `/tag [name]` | Filter by Obsidian tag (frontmatter `tags` + inline `#tags`, read from the metadata cache); autocompletes from every tag in use across the logbook folder |
 | `/type [type]` | Filter by note type; autocompletes the six types. Selecting a type with a sub-attribute (task/design → status, meeting → subtype) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
 
 **Other:**
@@ -336,19 +336,18 @@ A filter narrows what the feed shows; all active filters AND together. Filter ax
 - Free-text query (search)
 - Projects (multi-select)
 - Teams (multi-select)
+- Tags (multi-select) — read-only filter over Obsidian's own tags, via `/tag` (see §9)
 - Type (single)
 - Type-specific attribute (single, available once a type filter is set)
 
-Tags are not a filter axis here — filtering by tag is Obsidian's own search/tag pane, not something the plugin reimplements (see §9).
-
 ### Filter chips
 
-Active filters appear as chips inside the command bar, to the left of the input: a briefcase-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
+Active filters appear as chips inside the command bar, to the left of the input: a briefcase-icon chip for projects, a people-icon chip for teams, a plain chip for tags, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
 
 ### Removing filters
 
 - Click the × on a chip.
-- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: project → team → type → type attribute.
+- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: project → team → tag → type → type attribute.
 - Run `/clear`.
 
 ### Clicking things
@@ -368,7 +367,7 @@ This is the primary way users discover filtering — no query syntax to learn, j
 
 ### Tags
 
-Logbook has no tag feature of its own. Tagging a note is done exactly the way it's done on any other note in the vault — Obsidian's built-in `tags` frontmatter property, inline `#tags` in the body, the Properties editor, the tag pane, and tag-aware search. The plugin doesn't read, write, display, or filter on tags anywhere; it simply never touches that property and leaves it entirely to Obsidian.
+Logbook has no tag feature of its own — tagging a note is done exactly the way it's done on any other note in the vault: Obsidian's built-in `tags` frontmatter property, inline `#tags` in the body, the Properties editor, and the tag pane all still work unmodified. The plugin never writes, edits, or displays tags. The one exception is read-only filtering: the `/tag` command (§7) reads each note's combined tag set straight from Obsidian's metadata cache (`getAllTags`, covering both frontmatter `tags` and inline `#tags`) and lets the feed be filtered down to notes carrying a given tag, the same way `/project`/`/team` filter by `projects[]`/`teams[]`.
 
 ### Projects & teams
 

@@ -1,4 +1,4 @@
-import { App, TFile, normalizePath } from "obsidian";
+import { App, TFile, getAllTags, normalizePath } from "obsidian";
 import {
   LogNote,
   NoteFrontmatter,
@@ -91,9 +91,10 @@ export class NoteStore {
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
       const raw = cache?.frontmatter;
-      if (!raw || raw.type === "template") continue;
+      if (!cache || !raw || raw.type === "template") continue;
 
       const fm = normalizeFrontmatter(raw, file);
+      const tags = (getAllTags(cache) ?? []).map((t) => t.slice(1));
       const content = await this.app.vault.cachedRead(file);
       let body = content;
       if (content.startsWith("---")) {
@@ -101,7 +102,7 @@ export class NoteStore {
         body = end >= 0 ? content.slice(end + 5).trim() : "";
       }
 
-      notes.push({ file, body, fm });
+      notes.push({ file, body, fm, tags });
     }
     return notes;
   }
@@ -149,14 +150,6 @@ export class NoteStore {
     lines.push("---", "");
     await this.app.vault.create(path, lines.join("\n"));
     return this.app.vault.getAbstractFileByPath(path) as TFile;
-  }
-
-  async createDoneTask(title: string): Promise<TFile> {
-    const file = await this.createNote("task", title);
-    await this.updateFrontmatter(file, (fm) => {
-      fm.status = "done";
-    });
-    return file;
   }
 
   async createRecurringMeeting(title: string): Promise<TFile> {

@@ -59,10 +59,10 @@ export class LogbookView extends ItemView {
         this.renderDisplay();
       },
       onCreate: (type, title) => void this.createAndShow(type, title),
-      onCreateDone: (title) => void this.createAndShow("task", title, { done: true }),
       onCreateRecurring: (title) => void this.createAndShow("meeting", title, { recurring: true }),
       onFilterProject: (name) => this.addFilterValue("projects", name),
       onFilterTeam: (name) => this.addFilterValue("teams", name),
+      onFilterTag: (name) => this.addFilterValue("tags", name),
       onFilterType: (type, attr) => {
         this.filters.type = type;
         this.filters.typeAttr = attr ?? null;
@@ -76,6 +76,7 @@ export class LogbookView extends ItemView {
       onRemoveFilterChip: (kind, value) => this.removeFilterChip(kind, value),
       getAllProjects: () => this.collectPool((n) => n.fm.projects),
       getAllTeams: () => this.collectPool((n) => n.fm.teams),
+      getAllTags: () => this.collectPool((n) => n.tags),
       getTypeAttrValues: (type) => this.typeAttrValues(type),
       getRecurringMeetings: () => this.recurringMeetings(),
       getFilters: () => this.filters,
@@ -171,14 +172,15 @@ export class LogbookView extends ItemView {
     if (this.activeCloseHandler) void this.activeCloseHandler();
   }
 
-  private addFilterValue(key: "projects" | "teams", value: string) {
+  private addFilterValue(key: "projects" | "teams" | "tags", value: string) {
     if (!this.filters[key].includes(value)) this.filters[key] = [...this.filters[key], value];
     this.afterFilterChange();
   }
 
-  private removeFilterChip(kind: "project" | "team" | "type" | "typeAttr", value?: string) {
+  private removeFilterChip(kind: "project" | "team" | "tag" | "type" | "typeAttr", value?: string) {
     if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
     else if (kind === "team") this.filters.teams = this.filters.teams.filter((v) => v !== value);
+    else if (kind === "tag") this.filters.tags = this.filters.tags.filter((v) => v !== value);
     else if (kind === "type") {
       this.filters.type = null;
       this.filters.typeAttr = null;
@@ -334,7 +336,7 @@ export class LogbookView extends ItemView {
   private async createAndShow(
     type: NoteType,
     titleOrQuestion: string,
-    opts?: { done?: boolean; recurring?: boolean }
+    opts?: { recurring?: boolean }
   ) {
     // Mirrors what ctx.expand() does when switching between two existing cards
     // (commit + collapse the previously-open one) — createAndShow sets
@@ -342,11 +344,9 @@ export class LogbookView extends ItemView {
     // this the previously-open card was left expanded with its edits unsaved.
     if (this.activeCloseHandler) await this.activeCloseHandler();
 
-    const file = opts?.done
-      ? await this.store.createDoneTask(titleOrQuestion)
-      : opts?.recurring
-        ? await this.store.createRecurringMeeting(titleOrQuestion)
-        : await this.store.createNote(type, titleOrQuestion);
+    const file = opts?.recurring
+      ? await this.store.createRecurringMeeting(titleOrQuestion)
+      : await this.store.createNote(type, titleOrQuestion);
 
     this.expandedPath = file.path;
     this.pendingDivider = `Writing a ${NOTE_TYPES[type].label.toLowerCase()}`;
