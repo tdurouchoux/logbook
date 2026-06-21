@@ -1,9 +1,9 @@
-import { App, TFile, normalizePath } from "obsidian";
+import { App, TFile, getAllTags, normalizePath } from "obsidian";
 import {
   LogNote,
   NoteFrontmatter,
   NoteType,
-  MeetingFrontmatter,
+  RecurringFrontmatter,
 } from "./types";
 import { generateId, sanitizeFilename, todayISO } from "./utils";
 import { LogbookSettings } from "./settings";
@@ -91,9 +91,10 @@ export class NoteStore {
     for (const file of files) {
       const cache = this.app.metadataCache.getFileCache(file);
       const raw = cache?.frontmatter;
-      if (!raw || raw.type === "template") continue;
+      if (!cache || !raw) continue;
 
       const fm = normalizeFrontmatter(raw, file);
+      const tags = (getAllTags(cache) ?? []).map((t) => t.slice(1));
       const content = await this.app.vault.cachedRead(file);
       let body = content;
       if (content.startsWith("---")) {
@@ -101,7 +102,7 @@ export class NoteStore {
         body = end >= 0 ? content.slice(end + 5).trim() : "";
       }
 
-      notes.push({ file, body, fm });
+      notes.push({ file, body, fm, tags });
     }
     return notes;
   }
@@ -139,7 +140,9 @@ export class NoteStore {
     } else if (type === "design") {
       lines.push("status: exploring");
     } else if (type === "meeting") {
-      lines.push("subtype: standalone", "attendees: []");
+      lines.push("agenda: meetup", "attendees: []");
+    } else if (type === "recurring") {
+      lines.push("attendees: []");
     } else if (type === "knowledge") {
       lines.push("techStack: []");
     } else if (type === "thoughts") {
@@ -151,19 +154,10 @@ export class NoteStore {
     return this.app.vault.getAbstractFileByPath(path) as TFile;
   }
 
-  async createDoneTask(title: string): Promise<TFile> {
-    const file = await this.createNote("task", title);
-    await this.updateFrontmatter(file, (fm) => {
-      fm.status = "done";
-    });
-    return file;
-  }
-
   async createRecurringMeeting(title: string): Promise<TFile> {
-    const file = await this.createNote("meeting", title);
+    const file = await this.createNote("recurring", title);
     const today = todayISO();
     await this.updateFrontmatter(file, (fm) => {
-      fm.subtype = "recurring";
       fm.occurrences = [today];
     });
     await this.app.vault.process(file, (content) => {
@@ -173,62 +167,15 @@ export class NoteStore {
   }
 
   /** design.md §7 /occurrence — add or jump to today's occurrence on an existing recurring meeting. */
-  async addOrFindTodayOccurrence(file: TFile, fm: MeetingFrontmatter): Promise<void> {
+  async addOrFindTodayOccurrence(file: TFile, fm: RecurringFrontmatter): Promise<void> {
     const today = todayISO();
-    if (fm.occurrences?.includes(today)) return;
+    if (fm.occurrences.includes(today)) return;
 
-    const headings = fm.template ? await this.getTemplateHeadings(fm.template) : [];
-    await this.app.vault.process(file, (content) => insertOccurrenceHeading(content, today, headings));
+    await this.app.vault.process(file, (content) => insertOccurrenceHeading(content, today));
     await this.updateFrontmatter(file, (raw) => {
       const occ: string[] = Array.isArray(raw.occurrences) ? raw.occurrences : [];
       raw.occurrences = [today, ...occ.filter((d) => d !== today)];
     });
-  }
-
-  /** design.md §5.3 meeting templates — notes with `type: template` in the logbook folder, headings-only. */
-  async listTemplates(): Promise<{ title: string; path: string }[]> {
-    const prefix = this.folder + "/";
-    const files = this.app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(prefix));
-    const templates: { title: string; path: string }[] = [];
-    for (const file of files) {
-      const raw = this.app.metadataCache.getFileCache(file)?.frontmatter;
-      if (raw?.type === "template") {
-        templates.push({ title: typeof raw.title === "string" ? raw.title : file.basename, path: file.path });
-      }
-    }
-    return templates;
-  }
-
-  private async getTemplateHeadings(templateTitle: string): Promise<string[]> {
-    const templates = await this.listTemplates();
-    const match = templates.find((t) => t.title === templateTitle);
-    if (!match) return [];
-    const file = this.app.vault.getAbstractFileByPath(match.path);
-    if (!(file instanceof TFile)) return [];
-    const content = await this.app.vault.cachedRead(file);
-    const end = content.indexOf("\n---\n");
-    const body = content.startsWith("---") && end >= 0 ? content.slice(end + 5) : content;
-    return body
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("###"));
-  }
-
-  /** Sets a meeting's template reference; for standalone meetings with no body yet, also scaffolds it. */
-  async setMeetingTemplate(file: TFile, fm: MeetingFrontmatter, template: string): Promise<void> {
-    await this.updateFrontmatter(file, (raw) => {
-      raw.template = template || undefined;
-    });
-    if (!template || fm.subtype !== "standalone") return;
-
-    const content = await this.app.vault.cachedRead(file);
-    const end = content.indexOf("\n---\n");
-    const body = content.startsWith("---") && end >= 0 ? content.slice(end + 5).trim() : "";
-    if (body) return;
-
-    const headings = await this.getTemplateHeadings(template);
-    if (!headings.length) return;
-    await this.app.vault.process(file, (c) => scaffoldBody(c, headings));
   }
 
   async renameTitle(file: TFile, newTitle: string): Promise<void> {
@@ -296,11 +243,15 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
       return {
         ...base,
         type: "meeting",
-        subtype: (raw.subtype as any) ?? "standalone",
-        theme: typeof raw.theme === "string" ? raw.theme : undefined,
+        agenda: (raw.agenda as any) ?? "meetup",
         attendees: Array.isArray(raw.attendees) ? raw.attendees.map(String) : [],
-        occurrences: Array.isArray(raw.occurrences) ? raw.occurrences.map(String) : undefined,
-        template: typeof raw.template === "string" ? raw.template : undefined,
+      };
+    case "recurring":
+      return {
+        ...base,
+        type: "recurring",
+        attendees: Array.isArray(raw.attendees) ? raw.attendees.map(String) : [],
+        occurrences: Array.isArray(raw.occurrences) ? raw.occurrences.map(String) : [],
       };
     case "thoughts":
       return {
@@ -326,21 +277,13 @@ function escapeYamlString(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function insertOccurrenceHeading(content: string, isoDate: string, headingLines: string[] = []): string {
+function insertOccurrenceHeading(content: string, isoDate: string): string {
   const end = content.indexOf("\n---\n");
   const fmEnd = content.startsWith("---") && end >= 0 ? end + 5 : 0;
   const head = content.slice(0, fmEnd);
   const body = content.slice(fmEnd);
-  const scaffold = headingLines.length ? headingLines.join("\n\n") + "\n\n" : "";
-  const heading = `## ${isoDate}\n\n${scaffold}`;
+  const heading = `## ${isoDate}\n\n`;
   // Insert above all existing occurrence headings, i.e. right at the top of the body.
   const trimmedBody = body.replace(/^\s*/, "");
   return head + heading + trimmedBody;
-}
-
-function scaffoldBody(content: string, headingLines: string[]): string {
-  const end = content.indexOf("\n---\n");
-  const fmEnd = content.startsWith("---") && end >= 0 ? end + 5 : 0;
-  const head = content.slice(0, fmEnd);
-  return head + headingLines.join("\n\n") + "\n";
 }

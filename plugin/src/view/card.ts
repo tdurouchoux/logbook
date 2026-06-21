@@ -1,4 +1,4 @@
-import { App, Menu, setIcon } from "obsidian";
+import { App, Menu, setIcon, renderMatches } from "obsidian";
 import {
   LogNote,
   NoteType,
@@ -7,14 +7,16 @@ import {
   DESIGN_STATUSES,
   isTask,
   isMeeting,
+  isRecurring,
   isThoughts,
   isKnowledge,
   isDesign,
   convertType,
+  MEETING_AGENDAS,
 } from "../types";
 import { NoteStore } from "../note-store";
 import { relativeTime } from "../utils";
-import { highlight } from "../filters";
+import { fuzzyMatchRanges } from "../filters";
 import { renderPicker } from "./pickers";
 
 export interface CardContext {
@@ -26,7 +28,7 @@ export interface CardContext {
   collapse(path: string): void;
   discardEdits(path: string): void;
   deleteNote(path: string): void;
-  pools: { projects(): string[]; teams(): string[]; templates(): string[] };
+  pools: { projects(): string[]; teams(): string[] };
   searchQuery: string;
   onFilterProject(p: string): void;
   onFilterTeam(t: string): void;
@@ -51,7 +53,6 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   // changed here. `commit()` flushes it all in one batch when the card closes.
   const dirty = new Set<string>();
   let titleDirty = false;
-  let templateDirty = false;
   let typeDirty = false;
 
   // ── Collapsed header ──────────────────────────────────────────────────
@@ -145,17 +146,12 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   // directly, instead of relying on the keystroke bubbling all the way up to a
   // single card-level listener (which a picker's own Enter handling, or some
   // future child listener, could swallow before it gets there).
-  /** Flushes every staged edit in as few writes as possible: a rename (title),
-   *  a template scaffold (meeting template), and one batched frontmatter write
-   *  for everything else (design.md §4). */
+  /** Flushes every staged edit in as few writes as possible: a rename (title)
+   *  and one batched frontmatter write for everything else (design.md §4). */
   const commit = async () => {
     if (titleDirty) {
       titleDirty = false;
       await ctx.store.renameTitle(note.file, note.fm.title);
-    }
-    if (templateDirty && isMeeting(note)) {
-      templateDirty = false;
-      await ctx.store.setMeetingTemplate(note.file, note.fm, note.fm.template ?? "");
     }
     if (typeDirty) {
       // Replace-not-merge (design.md §15): a type change drops every old-type
@@ -198,7 +194,11 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const titleRow = header.createDiv("logbook-title-row");
   let questionEl: HTMLElement | null = null;
   const titleEl = titleRow.createEl("div", { cls: "logbook-title" });
-  titleEl.innerHTML = ctx.searchQuery ? highlight(note.fm.title, ctx.searchQuery) : escapeHtml(note.fm.title);
+  if (ctx.searchQuery) {
+    renderMatches(titleEl, note.fm.title, fuzzyMatchRanges(note.fm.title, ctx.searchQuery));
+  } else {
+    titleEl.textContent = note.fm.title;
+  }
 
   let occurrenceInfoEl: HTMLElement | null = null;
 
@@ -207,7 +207,11 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   if (note.body) {
     const plain = note.body.replace(/^#{1,4}\s+/gm, "").replace(/[*_`>#]/g, "").slice(0, 160);
     const preview = previewWrap.createEl("div", { cls: "logbook-preview" });
-    preview.innerHTML = ctx.searchQuery ? highlight(plain, ctx.searchQuery) : escapeHtml(plain);
+    if (ctx.searchQuery) {
+      renderMatches(preview, plain, fuzzyMatchRanges(plain, ctx.searchQuery));
+    } else {
+      preview.textContent = plain;
+    }
   }
 
   // ── Expanded section ──────────────────────────────────────────────────
@@ -334,9 +338,9 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
       occurrenceInfoEl.remove();
       occurrenceInfoEl = null;
     }
-    if (isMeeting(note) && note.fm.subtype === "recurring") {
-      const n = note.fm.occurrences?.length ?? 0;
-      const latest = note.fm.occurrences?.[0];
+    if (isRecurring(note)) {
+      const n = note.fm.occurrences.length;
+      const latest = note.fm.occurrences[0];
       occurrenceInfoEl = header.createEl("div", {
         cls: "logbook-occurrence-info",
         text: `${n} occurrence${n === 1 ? "" : "s"}${latest ? ` · latest ${latest}` : ""}`,
@@ -358,7 +362,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     }
 
     typeFieldsEl.empty();
-    renderTypeFields(typeFieldsEl, note, ctx, dirty, () => (templateDirty = true), onFieldKeydown);
+    renderTypeFields(typeFieldsEl, note, ctx, dirty, onFieldKeydown);
   }
 
   /** Stages a type conversion (design.md §15): replaces note.fm with the converted
@@ -428,12 +432,12 @@ function renderPillLine(parent: HTMLElement, label: string): HTMLElement {
 }
 
 /**
- * The type's filterable-property pill (design.md §2, §4): task/design's `status`
- * filters when collapsed but cycles (and stages, design.md §4) when expanded;
- * meeting's `subtype` always filters, in either state, and is never editable.
- * Reused as a single DOM node relocated between the collapsed top row and the
- * expanded field block, so its click behavior is read from `card`'s current
- * `is-expanded` class at click time rather than baked in at render time.
+ * The type's filterable-property pill (design.md §2, §4): filters when collapsed,
+ * cycles through the enum (and stages, design.md §4) when expanded — task/design's
+ * `status`, meeting's `agenda`. Reused as a single DOM node relocated between the
+ * collapsed top row and the expanded field block, so its click behavior is read
+ * from `card`'s current `is-expanded` class at click time rather than baked in at
+ * render time.
  */
 function renderFilterAttrPill(
   parent: HTMLElement,
@@ -446,40 +450,27 @@ function renderFilterAttrPill(
   if (!typeInfo.filterAttr) return;
   const { key } = typeInfo.filterAttr;
 
-  if (isMeeting(note)) {
-    const value = note.fm.subtype;
-    const pill = parent.createEl("span", {
-      cls: `logbook-pill logbook-filter-attr-pill logbook-subtype-pill is-${value}`,
-      text: value,
-    });
-    pill.addEventListener("click", (e) => {
-      e.stopPropagation();
+  if (!(isTask(note) || isDesign(note) || isMeeting(note))) return;
+  const cycle = isTask(note) ? TASK_STATUSES : isDesign(note) ? DESIGN_STATUSES : MEETING_AGENDAS;
+  const pillClass = isMeeting(note) ? "logbook-agenda-pill" : "logbook-status-pill";
+  let value: string = (note.fm as unknown as Record<string, string>)[key];
+  const pill = parent.createEl("span", {
+    cls: `logbook-pill logbook-filter-attr-pill ${pillClass} is-${value}`,
+    text: value,
+  });
+  pill.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!card.hasClass("is-expanded")) {
       ctx.onFilterType(note.fm.type, { key, value });
-    });
-    return;
-  }
-
-  if (isTask(note) || isDesign(note)) {
-    const cycle = isTask(note) ? TASK_STATUSES : DESIGN_STATUSES;
-    let status: string = note.fm.status;
-    const pill = parent.createEl("span", {
-      cls: `logbook-pill logbook-filter-attr-pill logbook-status-pill is-${status}`,
-      text: status,
-    });
-    pill.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (!card.hasClass("is-expanded")) {
-        ctx.onFilterType(note.fm.type, { key, value: status });
-        return;
-      }
-      const idx = (cycle as string[]).indexOf(status);
-      status = cycle[(idx + 1) % cycle.length];
-      (note.fm as any).status = status;
-      dirty.add("status");
-      pill.textContent = status;
-      pill.className = `logbook-pill logbook-filter-attr-pill logbook-status-pill is-${status}`;
-    });
-  }
+      return;
+    }
+    const idx = (cycle as string[]).indexOf(value);
+    value = cycle[(idx + 1) % cycle.length];
+    (note.fm as unknown as Record<string, string>)[key] = value;
+    dirty.add(key);
+    pill.textContent = value;
+    pill.className = `logbook-pill logbook-filter-attr-pill ${pillClass} is-${value}`;
+  });
 }
 
 function renderTypeFields(
@@ -487,24 +478,9 @@ function renderTypeFields(
   note: LogNote,
   ctx: CardContext,
   dirty: Set<string>,
-  markTemplateDirty: () => void,
   onFieldKeydown: (e: KeyboardEvent) => void
 ) {
-  if (isMeeting(note)) {
-    const themeRow = container.createDiv("logbook-field-row");
-    themeRow.createEl("label", { text: "Theme" });
-    const themeInput = themeRow.createEl("input", {
-      cls: "logbook-field-input",
-      attr: { type: "text", placeholder: "theme…" },
-    });
-    themeInput.value = note.fm.theme ?? "";
-    themeInput.addEventListener("input", () => {
-      note.fm.theme = themeInput.value.trim() || undefined;
-      dirty.add("theme");
-    });
-    themeInput.addEventListener("click", (e) => e.stopPropagation());
-    themeInput.addEventListener("keydown", onFieldKeydown);
-
+  if (isMeeting(note) || isRecurring(note)) {
     const attendeesRow = container.createDiv("logbook-field-row");
     attendeesRow.createEl("label", { text: "Attendees" });
     const attendeesWrap = attendeesRow.createDiv();
@@ -518,23 +494,6 @@ function renderTypeFields(
         dirty.add("attendees");
       },
     });
-
-    const templateRow = container.createDiv("logbook-field-row");
-    templateRow.createEl("label", { text: "Template" });
-    const templateListId = `logbook-templates-${note.file.path.replace(/[^a-zA-Z0-9]/g, "-")}`;
-    const templateInput = templateRow.createEl("input", {
-      cls: "logbook-field-input",
-      attr: { type: "text", placeholder: "none", list: templateListId },
-    });
-    const datalist = templateRow.createEl("datalist", { attr: { id: templateListId } });
-    for (const t of ctx.pools.templates()) datalist.createEl("option", { attr: { value: t } });
-    templateInput.value = note.fm.template ?? "";
-    templateInput.addEventListener("input", () => {
-      note.fm.template = templateInput.value.trim() || undefined;
-      markTemplateDirty();
-    });
-    templateInput.addEventListener("click", (e) => e.stopPropagation());
-    templateInput.addEventListener("keydown", onFieldKeydown);
   }
 
   if (isThoughts(note)) {
@@ -576,8 +535,4 @@ function renderTypeFields(
       },
     });
   }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

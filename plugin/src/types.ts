@@ -4,13 +4,14 @@ export type NoteType =
   | "draft"
   | "task"
   | "meeting"
+  | "recurring"
   | "thoughts"
   | "knowledge"
   | "design";
 
 export type TaskStatus = "todo" | "done" | "suspended";
 export type DesignStatus = "exploring" | "in-review" | "decided";
-export type MeetingSubtype = "standalone" | "recurring";
+export type MeetingAgenda = "meetup" | "presentation" | "workshop" | "crisis" | "decision" | "other";
 
 export interface NoteTypeConfig {
   label: string;
@@ -32,7 +33,12 @@ export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
     label: "Meeting",
     color: "#5b8db8",
     desc: "Notes from a conversation",
-    filterAttr: { key: "subtype", label: "Subtype" },
+    filterAttr: { key: "agenda", label: "Agenda" },
+  },
+  recurring: {
+    label: "Recurring",
+    color: "#4a9d96",
+    desc: "Recurring meeting, one note per series",
   },
   thoughts: { label: "Thoughts", color: "#bf5680", desc: "Exploration of an idea" },
   knowledge: {
@@ -50,7 +56,14 @@ export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
 
 export const TASK_STATUSES: TaskStatus[] = ["todo", "done", "suspended"];
 export const DESIGN_STATUSES: DesignStatus[] = ["exploring", "in-review", "decided"];
-export const MEETING_SUBTYPES: MeetingSubtype[] = ["standalone", "recurring"];
+export const MEETING_AGENDAS: MeetingAgenda[] = [
+  "meetup",
+  "presentation",
+  "workshop",
+  "crisis",
+  "decision",
+  "other",
+];
 
 export const ALL_COMMANDS = (Object.entries(NOTE_TYPES) as [NoteType, NoteTypeConfig][]).map(
   ([key, cfg]) => ({ key, ...cfg })
@@ -75,11 +88,14 @@ export interface TaskFrontmatter extends CommonFrontmatter {
 
 export interface MeetingFrontmatter extends CommonFrontmatter {
   type: "meeting";
-  subtype: MeetingSubtype;
-  theme?: string;
+  agenda: MeetingAgenda;
   attendees: string[];
-  occurrences?: string[]; // recurring only, ISO dates, most recent first
-  template?: string;
+}
+
+export interface RecurringFrontmatter extends CommonFrontmatter {
+  type: "recurring";
+  attendees: string[];
+  occurrences: string[]; // ISO dates, most recent first
 }
 
 export interface ThoughtsFrontmatter extends CommonFrontmatter {
@@ -105,16 +121,20 @@ export interface DraftFrontmatter extends CommonFrontmatter {
 export type NoteFrontmatter =
   | TaskFrontmatter
   | MeetingFrontmatter
+  | RecurringFrontmatter
   | ThoughtsFrontmatter
   | KnowledgeFrontmatter
   | DesignFrontmatter
   | DraftFrontmatter;
 
-/** A note loaded from the vault: frontmatter fields plus the file/body it came from. */
+/** A note loaded from the vault: frontmatter fields plus the file/body it came from.
+ *  `tags` is Obsidian's own native tag set (frontmatter `tags` + inline `#tags`,
+ *  from the metadata cache) — the plugin never writes it, only reads it for `/tag`. */
 export interface LogNote {
   file: TFile;
   body: string;
   fm: NoteFrontmatter;
+  tags: string[];
 }
 
 export function isTask(n: LogNote): n is LogNote & { fm: TaskFrontmatter } {
@@ -122,6 +142,9 @@ export function isTask(n: LogNote): n is LogNote & { fm: TaskFrontmatter } {
 }
 export function isMeeting(n: LogNote): n is LogNote & { fm: MeetingFrontmatter } {
   return n.fm.type === "meeting";
+}
+export function isRecurring(n: LogNote): n is LogNote & { fm: RecurringFrontmatter } {
+  return n.fm.type === "recurring";
 }
 export function isThoughts(n: LogNote): n is LogNote & { fm: ThoughtsFrontmatter } {
   return n.fm.type === "thoughts";
@@ -152,7 +175,9 @@ export function convertType(fm: NoteFrontmatter, toType: NoteType): NoteFrontmat
     case "design":
       return { ...base, type: "design", status: "exploring" };
     case "meeting":
-      return { ...base, type: "meeting", subtype: "standalone", attendees: [] };
+      return { ...base, type: "meeting", agenda: "meetup", attendees: [] };
+    case "recurring":
+      return { ...base, type: "recurring", attendees: [], occurrences: [] };
     case "knowledge":
       return { ...base, type: "knowledge", techStack: [] };
     case "thoughts":
@@ -175,7 +200,7 @@ function localDateFromISO(iso: string): Date {
  *  other note touched today (which carry a real intraday mtime), pinning a just-created or
  *  just-edited recurring meeting to the top of "Today" instead of the bottom. */
 export function activityTimestamp(n: LogNote): number {
-  if (isMeeting(n) && n.fm.subtype === "recurring" && n.fm.occurrences?.length) {
+  if (isRecurring(n) && n.fm.occurrences.length) {
     const occDate = localDateFromISO(n.fm.occurrences[0]);
     if (!Number.isNaN(occDate.getTime())) {
       const today = new Date();

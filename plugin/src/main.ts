@@ -1,6 +1,13 @@
 import { Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, LogbookSettings, LogbookSettingTab } from "./settings";
 import { LogbookView, VIEW_TYPE_LOGBOOK } from "./view/LogbookView";
+import { ALL_COMMANDS } from "./types";
+
+const CREATION_COMMANDS = ALL_COMMANDS.map((c) => ({
+  id: `new-${c.key}`,
+  key: c.key,
+  name: `New ${c.label.toLowerCase()}`,
+}));
 
 export default class LogbookPlugin extends Plugin {
   settings!: LogbookSettings;
@@ -20,18 +27,29 @@ export default class LogbookPlugin extends Plugin {
         }
       },
     });
+    for (const c of CREATION_COMMANDS) {
+      this.addCommand({
+        id: c.id,
+        name: c.name,
+        callback: async () => {
+          const view = await this.activateView();
+          view.focusDockCommand(c.key);
+        },
+      });
+    }
     this.addSettingTab(new LogbookSettingTab(this.app, this));
   }
 
-  async activateView() {
+  async activateView(): Promise<LogbookView> {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_LOGBOOK);
     if (existing.length > 0) {
       this.app.workspace.revealLeaf(existing[0]);
-      return;
+      return existing[0].view as LogbookView;
     }
     const leaf = this.app.workspace.getLeaf("tab");
     await leaf.setViewState({ type: VIEW_TYPE_LOGBOOK, active: true });
     this.app.workspace.revealLeaf(leaf);
+    return leaf.view as LogbookView;
   }
 
   async loadSettings() {

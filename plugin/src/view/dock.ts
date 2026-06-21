@@ -10,16 +10,17 @@ export interface RecurringMeetingRef {
 export interface DockCallbacks {
   onSearch(query: string): void;
   onCreate(type: NoteType, titleOrQuestion: string): void;
-  onCreateDone(title: string): void;
   onCreateRecurring(title: string): void;
   onFilterProject(name: string): void;
   onFilterTeam(name: string): void;
+  onFilterTag(name: string): void;
   onFilterType(type: NoteType, attr?: { key: string; value: string }): void;
   onClearFilters(): void;
   onOccurrence(meeting: RecurringMeetingRef): void;
-  onRemoveFilterChip(kind: "project" | "team" | "type" | "typeAttr", value?: string): void;
+  onRemoveFilterChip(kind: "project" | "team" | "tag" | "type" | "typeAttr", value?: string): void;
   getAllProjects(): string[];
   getAllTeams(): string[];
+  getAllTags(): string[];
   getTypeAttrValues(type: NoteType): string[];
   getRecurringMeetings(): RecurringMeetingRef[];
   getFilters(): FilterState;
@@ -35,6 +36,7 @@ interface DropdownItem {
 const UTILITY_COMMANDS = [
   { key: "project", desc: "Filter by project" },
   { key: "team", desc: "Filter by team" },
+  { key: "tag", desc: "Filter by tag" },
   { key: "type", desc: "Filter by note type" },
   { key: "occurrence", desc: "Add/open today's occurrence" },
   { key: "clear", desc: "Remove all active filters" },
@@ -74,6 +76,9 @@ export class Dock {
     }
     for (const t of f.teams) {
       this.addChip("team", t, () => this.cb.onRemoveFilterChip("team", t), true);
+    }
+    for (const t of f.tags) {
+      this.addChip("tag", t, () => this.cb.onRemoveFilterChip("tag", t));
     }
     if (f.type) {
       this.addChip("type", NOTE_TYPES[f.type].label, () => this.cb.onRemoveFilterChip("type"));
@@ -149,6 +154,14 @@ export class Dock {
       });
       return;
     }
+    if (cmdKey === "tag") {
+      this.phase = "pick-arg";
+      this.showPickList(arg, this.cb.getAllTags(), (v) => {
+        this.cb.onFilterTag(v);
+        this.resetInput();
+      });
+      return;
+    }
     if (cmdKey === "occurrence") {
       this.phase = "pick-arg";
       const meetings = this.cb.getRecurringMeetings();
@@ -164,12 +177,24 @@ export class Dock {
       return;
     }
     if (cmdKey === "type") {
-      if (this.pendingType) {
-        this.phase = "pick-type-attr";
-        this.showTypeAttrList(arg);
-      } else {
+      const typeSpaceIdx = arg.indexOf(" ");
+      if (typeSpaceIdx === -1) {
+        // Still typing/filtering the type name itself.
+        this.pendingType = null;
         this.phase = "pick-arg";
         this.showTypeList(arg);
+        return;
+      }
+      const typeKey = arg.slice(0, typeSpaceIdx).toLowerCase() as NoteType;
+      const attrQuery = arg.slice(typeSpaceIdx + 1);
+      if (NOTE_TYPES[typeKey]?.filterAttr) {
+        this.pendingType = typeKey;
+        this.phase = "pick-type-attr";
+        this.showTypeAttrList(attrQuery);
+      } else {
+        // Unknown type, or a valid type with no filterable attribute — nothing to propose.
+        this.pendingType = null;
+        this.closeDropdown();
       }
       return;
     }
@@ -184,15 +209,9 @@ export class Dock {
   private showCommandList(prefix: string) {
     const creation = ALL_COMMANDS.filter((c) => fuzzyMatch(prefix, c.key));
     const utility = UTILITY_COMMANDS.filter((c) => fuzzyMatch(prefix, c.key));
-    const done = fuzzyMatch(prefix, "done") ? [{ key: "done", desc: "New task, status done" }] : [];
-    const recurring = fuzzyMatch(prefix, "recurring")
-      ? [{ key: "recurring", desc: "New recurring meeting" }]
-      : [];
 
     this.items = [
       ...creation.map((c) => this.commandItem(c.key, c.desc, () => this.pickCommand(c.key))),
-      ...done.map((c) => this.commandItem(c.key, c.desc, () => this.pickCommand(c.key))),
-      ...recurring.map((c) => this.commandItem(c.key, c.desc, () => this.pickCommand(c.key))),
       ...utility.map((c) => this.commandItem(c.key, c.desc, () => this.pickCommand(c.key))),
     ];
     this.idx = 0;
@@ -215,6 +234,12 @@ export class Dock {
     this.inputEl.value = `/${key} `;
     this.inputEl.focus();
     this.onInput();
+  }
+
+  /** Entry point for Obsidian command-palette commands (main.ts) — prefills and
+   *  focuses the bar exactly as picking the command from its own dropdown would. */
+  runCommand(key: string) {
+    this.pickCommand(key);
   }
 
   private showPickList(query: string, pool: string[], onPick: (v: string) => void) {
@@ -355,6 +380,10 @@ export class Dock {
       this.cb.onRemoveFilterChip("team", f.teams[f.teams.length - 1]);
       return true;
     }
+    if (f.tags.length) {
+      this.cb.onRemoveFilterChip("tag", f.tags[f.tags.length - 1]);
+      return true;
+    }
     if (f.typeAttr) {
       this.cb.onRemoveFilterChip("typeAttr");
       return true;
@@ -388,10 +417,7 @@ export class Dock {
         return;
       }
       if (!title) return;
-      if (cmdKey === "done") {
-        this.cb.onCreateDone(title);
-        this.resetInput();
-      } else if (cmdKey === "recurring") {
+      if (cmdKey === "recurring") {
         this.cb.onCreateRecurring(title);
         this.resetInput();
       } else if (NOTE_TYPES[cmdKey as NoteType]) {

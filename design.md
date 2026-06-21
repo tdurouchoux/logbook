@@ -42,7 +42,7 @@ Renaming the file when the title is edited inline (see §4) must go through `app
 ```yaml
 ---
 id: <stable identifier>   # generated on creation, never changes
-type: draft               # one of the six types below
+type: draft               # one of the seven types below
 title: "Note title"
 projects: []              # free-form, lowercase-hyphenated; a note can belong to multiple
 teams: []                 # same shape as projects, but for people/groups
@@ -57,15 +57,16 @@ There is no plugin-managed `updatedAt` field. "Last activity" is read straight o
 
 Tags are not a plugin-managed field. A note may or may not carry a `tags` frontmatter property — that's entirely Obsidian's own tag system (frontmatter `tags`, inline `#tags` in the body, the built-in tag pane and search). The plugin neither writes, edits, displays, nor filters by it; see §9.
 
-A note can be pinned, independent of its type — `pinned: true` in frontmatter, omitted entirely (not written as `false`) when not pinned, the same omit-when-absent convention used by the optional type-specific fields below (`theme`, `template`, `question`, `landed`). Pinning is toggled from the expanded card and changes nothing else about the note — it keeps its type, its filterability, its activity timestamp. See §3 for where pinned notes appear in the feed and §4 for the toggle itself.
+A note can be pinned, independent of its type — `pinned: true` in frontmatter, omitted entirely (not written as `false`) when not pinned, the same omit-when-absent convention used by the optional type-specific fields below (`question`, `landed`). Pinning is toggled from the expanded card and changes nothing else about the note — it keeps its type, its filterability, its activity timestamp. See §3 for where pinned notes appear in the feed and §4 for the toggle itself.
 
-### The six note types
+### The seven note types
 
 | Type | Extra fields | Badge color |
 |---|---|---|
 | **Draft** | *(none)* — auto-deleted 7 days after `createdAt` | warm gray |
 | **Task** | `status: todo \| done \| suspended` | amber |
-| **Meeting** | `subtype: standalone \| recurring`, `theme`, `attendees[]` + for recurring: `occurrences[]`; either subtype may carry `template` (filename reference) | dusty blue |
+| **Meeting** | `agenda: meetup \| presentation \| workshop \| crisis \| decision \| other`, `attendees[]` | dusty blue |
+| **Recurring** | `attendees[]`, `occurrences[]` | teal |
 | **Thoughts** | `question`, `landed` | muted plum |
 | **Knowledge** | `techStack[]` | moss green |
 | **Design** | `status: exploring \| in-review \| decided` | dusty violet |
@@ -75,7 +76,8 @@ A note can be pinned, independent of its type — `pinned: true` in frontmatter,
 | Type | Additional filterable attribute |
 |---|---|
 | Task | `status` |
-| Meeting | `subtype` |
+| Meeting | `agenda` |
+| Recurring | *(none)* |
 | Design | `status` |
 | Thoughts | *(none)* |
 | Knowledge | *(none)* |
@@ -139,7 +141,7 @@ Note title
 Body preview — 2 lines, plain text…
 ```
 
-- Top row, left to right: the type badge, then — if the type has one (see §2) — its filterable-property pill (`status` for task/design, `subtype` for meeting), then a project pill per value (briefcase icon) and a team pill per value (people icon). Any of these the note doesn't have is simply absent from the row; nothing reserves space for it.
+- Top row, left to right: the type badge, then — if the type has one (see §2) — its filterable-property pill (`status` for task/design, `agenda` for meeting), then a project pill per value (briefcase icon) and a team pill per value (people icon). Any of these the note doesn't have is simply absent from the row; nothing reserves space for it.
 - Top right: the chevron (closed state) and the note's "age" — a relative-time pill (`2h`, `3d`, …) — plus, only if the note is pinned, a pin glyph; absent entirely for an unpinned note, same as any other pill the note doesn't have. These are pinned to the top-right corner in both collapsed and expanded state (see Expanded below) — they don't drift when the pills row between them and the badge comes and goes. While collapsed, the pin glyph is a pure indicator, not a control — toggling pinned only happens on the expanded card (see below).
 - Middle: the title.
 - Bottom: a 2-line plain-text body preview (see §6) — shown only while collapsed; it disappears once the card expands, since expanding opens the real note in Obsidian's editor instead.
@@ -163,15 +165,15 @@ other type-specific fields…
 - Top left: type badge only — the filterable-property pill and the project/team pills move down into the field block below, since they're editable there now.
 - Top right: chevron (now rotated/open) and the note's age, still pinned to the card's top-right corner even though the pills row that used to sit between them and the badge has moved down into the field block — plus the pin glyph, which is the same node as in the collapsed state but is now a clickable toggle: clicking it flips the note's staged `pinned` value and swaps the glyph between filled (pinned) and outline (not pinned). Like every other field, the change is only staged here, flushed when the card closes (see below).
 - Middle: the title (now an editable input), followed by every additional field:
-  - The filterable-property pill, project pills, and team pills each get their own line, with the pill type's name as a label on the left (`Status`/`Subtype`, `Projects`, `Teams`) — the same label-on-the-left layout as the other type-specific fields below them. Their behavior on click depends on the field:
+  - The filterable-property pill, project pills, and team pills each get their own line, with the pill type's name as a label on the left (`Status`/`Agenda`, `Projects`, `Teams`) — the same label-on-the-left layout as the other type-specific fields below them. Their behavior on click depends on the field:
     - **Project and team pills:** clicking the pill itself (not its `×`) still applies it as a filter, same as collapsed. The `×` removes the value; a small **`+`** button at the end of the line is the only add affordance — clicking it reveals a free-text input (autofocused) with autocomplete, `Enter`/`,` to add (the input stays open afterward so several values can be added in a row), `Backspace` on an empty input removes the last value, and it collapses back to `+` on blur or `Esc`.
     - **Task/design's `status` pill:** no longer filters while expanded — clicking it instead cycles to the next status (`todo → done → suspended → todo`, or `exploring → in-review → decided → exploring`); like every other field, the new value is staged and only written when the card closes. There's no `×` or removal — every task/design note always has a status.
-    - **Meeting's `subtype` pill:** stays read-only/filter-only even while expanded — clicking it applies the subtype filter, exactly as collapsed. There's no edit affordance, since a meeting can't be converted between standalone and recurring after creation.
-  - Remaining type-specific fields with no pill treatment — thoughts' `question`/`landed`, meeting's `theme`/`attendees`, knowledge's `techStack` (not filterable, see §2) — are plain labeled inputs/pickers, not pills, and carry no filter-on-click behavior.
+    - **Meeting's `agenda` pill:** behaves exactly like task/design's `status` pill above — cycles to the next value (`meetup → presentation → workshop → crisis → decision → other → meetup`) instead of filtering while expanded; like every other field, the new value is staged and only written when the card closes.
+  - Remaining type-specific fields with no pill treatment — thoughts' `question`/`landed`, meeting/recurring's `attendees`, knowledge's `techStack` (not filterable, see §2) — are plain labeled inputs/pickers, not pills, and carry no filter-on-click behavior.
 - No body preview while expanded — see above.
 - Footer, left to right: the hint text (`⌘↵ save / esc collapse`), then a **Change type** button, then an explicit **Save** button, then a trash-bin button pinned to the bottom-right corner of the card — delete stays the absolute last/rightmost control, same as before.
   - **Save**: identical effect to `⌘↵` — flushes every staged edit (commit, below) and collapses the card. It exists specifically because the global `Mod+Enter` hotkey depends on keyboard focus and keybinding behavior that's proven unreliable in practice (§12) — the button always works regardless of where focus is or what else is bound to that combination.
-  - **Change type**: opens a small menu listing the other five types by name (the same list the `/type` command's first step uses). Picking one stages a type change exactly like any other field edit — nothing is written until the card closes (Save, `⌘↵`, click-away, or switching cards) — and `Esc` discards a staged type change the same way it discards any other staged edit. See "Changing a note's type" below for what the conversion actually does.
+  - **Change type**: opens a small menu listing the other six types by name (the same list the `/type` command's first step uses). Picking one stages a type change exactly like any other field edit — nothing is written until the card closes (Save, `⌘↵`, click-away, or switching cards) — and `Esc` discards a staged type change the same way it discards any other staged edit. See "Changing a note's type" below for what the conversion actually does.
   - **Delete**: clicking it **soft-deletes** the note — `app.vault.trash()`, the same never-hard-delete mechanism already used for draft auto-delete (§5.1), so it's recoverable from the vault's configured trash location. A single accidental click can't delete anything: the first click puts the button into an armed/confirming state (e.g. a red fill, for a few seconds) without doing anything yet; a second click while armed actually deletes, anything else (the timeout elapsing, or the card closing) disarms it back to the normal state. Deleting discards any staged-but-unsaved edits on that card outright — there's nothing to commit. The card itself disappears from the feed via the same vault `delete` event that already drives live refresh elsewhere (§15), not a special case.
 - **Nothing is written to disk while a field is being edited.** Every property edit — title, the filterable-property pill, project/team pills, every type-specific field, the pin toggle, and a type change — updates the card's own UI immediately (and the in-memory note, so filtering/sorting elsewhere stays consistent) but is only staged, not saved. Staged edits are flushed to disk — as a rename (if the title changed) plus a single batched `processFrontMatter` call for everything else — the moment the card is explicitly closed: `⌘↵`, the **Save** button, clicking elsewhere to collapse, or expanding a different card. `Esc` discards the staged edits instead of saving them: since nothing was written yet, discarding is just re-reading the note's still-unchanged frontmatter and re-rendering the card from it, then collapsing.
 - `⌘↵` and the footer's explicit **Save** button do the same thing and exist redundantly for the same reason: `⌘↵` works two ways — as a global hotkey (`Mod+Enter`) that closes/saves whichever card is currently expanded regardless of which pane has focus (needed because expanding a card opens its note in Obsidian's editor and usually moves keyboard focus there), and as a `keydown` listener attached directly to every field input inside the card itself (title, every plain type-specific input, and every picker's text input) — so it also works the instant focus is still inside the card's own title or property fields, without depending on the keystroke bubbling up past a picker's own Enter-to-add handling. In practice this has repeatedly proven unreliable, which is why the **Save** button exists: a plain click that always works no matter where focus landed. `Esc` is wired the same way as `⌘↵`, on both the card and every field.
@@ -189,15 +191,15 @@ Creating a note from the command bar follows the same rule, since the resulting 
 
 ### Changing a note's type
 
-The **Change type** button in the expanded card's footer (see above) is the only way to convert a note from one type to another after creation. Clicking it opens a dropdown of the other five types; picking one stages the conversion immediately — the expanded card's type-specific fields (§5) re-render right there to match the new type, and the badge and filterable-property pill update too — but, like every other staged edit, nothing is written to disk until the card closes.
+The **Change type** button in the expanded card's footer (see above) is the only way to convert a note from one type to another after creation. Clicking it opens a dropdown of the other six types; picking one stages the conversion immediately — the expanded card's type-specific fields (§5) re-render right there to match the new type, and the badge and filterable-property pill update too — but, like every other staged edit, nothing is written to disk until the card closes.
 
 Conversion rules:
 
 - Every common field (§2) — `id`, `title`, `projects`, `teams`, `createdAt`, `pinned` — is preserved unchanged.
 - Every field specific to the *old* type is dropped.
-- Every field specific to the *new* type is (re)initialized to the same default it would get from `/<type>` on a brand-new note: `status: todo` for task, `status: exploring` for design, `subtype: standalone` with empty `attendees: []` for meeting (`theme`/`template`/`occurrences` are left unset — converting *to* meeting always yields a standalone meeting, never recurring, since recurring needs the occurrence/body scaffolding §5.3 sets up at creation time), empty `techStack: []` for knowledge, `question`/`landed` left unset for thoughts, nothing extra for draft.
+- Every field specific to the *new* type is (re)initialized to the same default it would get from `/<type>` on a brand-new note: `status: todo` for task, `status: exploring` for design, `agenda: meetup` with empty `attendees: []` for meeting, empty `attendees: []` and empty `occurrences: []` for recurring (converting *to* recurring this way never seeds today's occurrence or its body heading the way `/recurring` does — the occurrence-creation scaffolding in §5.3 only runs at note creation, not on a type change), empty `techStack: []` for knowledge, `question`/`landed` left unset for thoughts, nothing extra for draft.
 - No attempt is made to map between same-named-but-different-domain fields — task's and design's `status` enums don't share values (`todo`/`done`/`suspended` vs. `exploring`/`in-review`/`decided`), so converting between them always resets to the new type's default rather than guessing an equivalent.
-- The note's body is never touched. For a recurring meeting specifically, this means converting it away leaves its `## <date>` occurrence headings sitting in the body as plain content — only the `subtype`/`occurrences`/`template` frontmatter is dropped, the headings themselves don't disappear.
+- The note's body is never touched. For a recurring meeting specifically, this means converting it away leaves its `## <date>` occurrence headings sitting in the body as plain content — only the `attendees`/`occurrences` frontmatter is dropped, the headings themselves don't disappear.
 - This is a lossy operation by design — dropped fields are simply gone once the card is saved. There's no confirmation step: it's a frontmatter-only change, the note itself is never deleted, and switching back doesn't un-lose the old fields' values any more than re-running `/task` on a `/design` note ever would have.
 
 ---
@@ -216,35 +218,30 @@ An action with a state.
 
 - `status`: `todo`, `done`, or `suspended`.
 - Badge color: amber.
-- Created the same way as any other note type: inline at the bottom of the feed, via the `/task` (status `todo`) or `/done` (status `done`, for logging things already finished) commands.
+- Created the same way as any other note type: inline at the bottom of the feed, via the `/task` command (status `todo`).
 - Status pill: on the collapsed card, clicking it applies a status filter (see §4, §8); in the expanded card, clicking it instead cycles `todo → done → suspended → todo` and saves immediately.
 - `done` tasks: title struck through, card dimmed. `suspended` tasks: dimmed further.
 
 ### 5.3 Meeting
 
-Notes from a conversation.
+Notes from a single conversation.
 
-Common fields: `theme` (plain field, not filterable), `attendees[]` (first names, shown inline on the card).
+- `agenda`: `meetup`, `presentation`, `workshop`, `crisis`, `decision`, or `other`. The meeting type's filterable attribute (see §2, §4): on the collapsed card, clicking the pill applies an `agenda` filter; on the expanded card, clicking it instead cycles to the next value and stages the change, the same way task/design's `status` pill behaves (see §4, §5.2).
+- `attendees[]` (first names, shown inline on the card).
+- Badge color: dusty blue.
 
-#### Standalone
+### 5.4 Recurring
 
-- `subtype: standalone`. Body holds the entire set of notes from that one meeting.
+A meeting that happens repeatedly, tracked as one note per series rather than one note per occurrence.
 
-#### Recurring
-
-- `subtype: recurring`. Each occurrence is stored as a second-level heading (`## 2025-05-14`, ISO date) inside the single file's body, most recent first. `occurrences[]` in frontmatter mirrors those dates for fast indexing, but the `##` headings in the body are the canonical structure.
-
-`subtype` is the meeting type's filterable attribute (see §2, §4): it renders as a pill on every meeting card, clicking it always applies a `subtype` filter — collapsed or expanded — and it's never editable from the card, since a meeting can't be converted between standalone and recurring after creation.
-- Card subtype indicator: `N occurrences`, plus the date of the latest one.
+- `attendees[]` (first names, shown inline on the card).
+- Each occurrence is stored as a second-level heading (`## 2025-05-14`, ISO date) inside the single file's body, most recent first. `occurrences[]` in frontmatter mirrors those dates for fast indexing, but the `##` headings in the body are the canonical structure.
+- No filterable attribute (see §2).
+- Card indicator: `N occurrences`, plus the date of the latest one.
 - There is no inline occurrence UI on the card — expanding it opens the note in Obsidian's editor, same as any other note (see §4), which is where the full history of occurrences is visible. Adding today's occurrence is a command, not a feed interaction: see **`/occurrence`** in §7.
+- Badge color: teal.
 
-#### Meeting templates
-
-- A standalone or recurring meeting note may reference a **template** via a `template` frontmatter field (the template file's name).
-- A template is a regular `.md` file with `type: template` in frontmatter, containing only a list of `###` headings with no body content.
-- Creating a new occurrence (recurring) or a new meeting (standalone) with a template applies pre-fills the body with those headings as an empty scaffold.
-
-### 5.4 Thoughts
+### 5.5 Thoughts
 
 An exploration of an idea or question.
 
@@ -253,14 +250,14 @@ An exploration of an idea or question.
 - The `/thoughts [question]` command pre-fills the `question` field.
 - Badge color: muted plum.
 
-### 5.5 Knowledge
+### 5.6 Knowledge
 
 Something worth remembering — a fact, snippet, quote, definition.
 
 - `techStack[]` — optional list of technologies/concepts. Card shows a small uppercase `STACK` label alongside it. Not a filterable attribute for now (see §2) — no header pill, no filter-on-click.
 - Badge color: moss green.
 
-### 5.6 Design
+### 5.7 Design
 
 Technical design of part of a project.
 
@@ -273,7 +270,7 @@ Technical design of part of a project.
 
 The feed never renders a note's body as markdown — only a plain-text preview (markdown syntax stripped beyond headings/bold/italic/links, clamped to two lines), shown only on the collapsed card. Expanding a card opens the real note in Obsidian's native editor instead (see §4, "Opening in Obsidian's editor"), so there's nothing left to preview once it's open. Full markdown support — headings, bold/italic/strikethrough, code blocks with syntax highlighting, task checkboxes, GFM tables, links, Obsidian-style callouts, and everything else — is simply whatever Obsidian's own native editor and reading view already provide. The plugin does no rendering work for any of it.
 
-When a search/filter query is active, matching terms are wrapped in `<mark>` in the body preview — the only place a preview is shown, since it's collapsed-only.
+When a search/filter query is active, matched characters are highlighted in the body preview (via Obsidian's own `renderMatches`, the same primitive its quick switcher uses) — the only place a preview is shown, since it's collapsed-only.
 
 ---
 
@@ -283,7 +280,7 @@ A single input at the bottom of the view, with two modes.
 
 ### Search mode (default)
 
-- Free text is a search query: matches AND across whitespace-separated terms, checked against `title`, `body`, `projects`, `teams`, and every type-specific field. (Searching by tag is Obsidian's own job — its search pane and tag pane already do this; see §9.)
+- Free text is a search query: each whitespace-separated term is fuzzy-matched (typo-tolerant, out-of-order-character-tolerant — Obsidian's own `prepareFuzzySearch`, the same matcher behind its quick switcher) independently, and all terms must match (AND) somewhere across `title`, `body`, `projects`, `teams`, and every type-specific field, treated as one combined haystack per note. It does not match tags — free-text tag search is still Obsidian's own search/tag pane's job; the plugin's only tag-aware affordance is the dedicated `/tag` filter command (see §9). A fuzzy match is filter-only: it doesn't change the feed's sort order, which stays the same chronological/day-grouped order described in §3 regardless of which notes a query lets through.
 - Matches are highlighted (see §6) in card previews while the query is active.
 - When filters are active, the bar shows their chips to the left of the input (see §8).
 - Free text never creates a note — note creation only happens through `/` commands.
@@ -298,18 +295,17 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 |---|---|
 | `/draft [title]` | New draft |
 | `/task [title]` | New task, status `todo` |
-| `/done [title]` | New task, status `done` |
-| `/meeting [title]` | New standalone meeting |
+| `/meeting [title]` | New meeting, agenda `meetup` |
 | `/recurring [title]` | New recurring meeting with one occurrence dated today |
 | `/thoughts [question]` | New thoughts note, `question` pre-filled |
 | `/knowledge [title]` | New knowledge note |
 | `/design [title]` | New design note |
 
-**`/occurrence [meeting]`** — adds today's occurrence to an *existing* recurring meeting, rather than creating a new note. Typing `/occurrence ` with nothing after it opens a dropdown listing every recurring meeting (`type: meeting`, `subtype: recurring`), latest-occurrence-first; typing further narrows it by fuzzy-matching titles, the same pattern used by `/project` and `/team`. Navigate with `↑`/`↓`, pick with `Tab` or `Enter`. On selecting one:
+**`/occurrence [meeting]`** — adds today's occurrence to an *existing* recurring meeting, rather than creating a new note. Typing `/occurrence ` with nothing after it opens a dropdown listing every `type: recurring` note, latest-occurrence-first; typing further narrows it by fuzzy-matching titles, the same pattern used by `/project` and `/team`. Navigate with `↑`/`↓`, pick with `Tab` or `Enter`. On selecting one:
 
 - If a `## <today's ISO date>` heading already exists in that note (checked against its `occurrences[]` frontmatter, no need to open the file), nothing is inserted — the command just opens the note with the cursor on that existing heading. This avoids duplicate headings if the command is run twice in a day.
 - Otherwise, the plugin inserts a new `## <today's ISO date>` heading at the top of the body, above all existing occurrence headings, via `app.vault.process()` — an atomic read-modify-write against the file's current on-disk content, not a cached in-memory copy, so it can't clobber concurrent edits or desync from what's actually on disk. It then prepends today's date to `occurrences[]` via `processFrontMatter` (see §15 for the write-queue note on that API). These are two separate, sequential atomic writes, not one transaction.
-- The note is then opened in Obsidian's native editor (a normal `leaf.openFile`), with the cursor placed on the blank line right under the new heading — ready for the user to type that occurrence's notes directly. This is the only way occurrence content gets added; there is no inline editor for it in the feed (see §4, §5.3).
+- The note is then opened in Obsidian's native editor (a normal `leaf.openFile`), with the cursor placed on the blank line right under the new heading — ready for the user to type that occurrence's notes directly. This is the only way occurrence content gets added; there is no inline editor for it in the feed (see §4, §5.4).
 
 **Filter commands** — apply a filter to the feed:
 
@@ -317,7 +313,8 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 |---|---|
 | `/project [name]` | Filter by project; autocompletes from existing projects |
 | `/team [name]` | Filter by team; autocompletes from existing teams |
-| `/type [type]` | Filter by note type; autocompletes the six types. Selecting a type with a sub-attribute (task/design → status, meeting → subtype) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
+| `/tag [name]` | Filter by Obsidian tag (frontmatter `tags` + inline `#tags`, read from the metadata cache); autocompletes from every tag in use across the logbook folder |
+| `/type [type]` | Filter by note type; autocompletes the seven types. Selecting a type with a sub-attribute (task/design → status, meeting → agenda) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
 
 **Other:**
 
@@ -326,6 +323,12 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 | `/clear` | Remove all active filters |
 
 The dropdown fuzzy-matches by prefix as the user types. `Tab` selects the highlighted command; `↑`/`↓` navigate it; `Enter` runs the selected command (or submits the typed search query, in search mode); `Esc` cancels and clears the bar.
+
+### Command palette
+
+The seven creation commands (`/draft`, `/task`, `/meeting`, `/recurring`, `/thoughts`, `/knowledge`, `/design`) also exist as standalone entries in Obsidian's own command palette — `Logbook: New draft`, `Logbook: New task`, …, `Logbook: New recurring meeting` — reachable, and hotkey-bindable via Obsidian's own hotkey settings, from anywhere in the vault, not just while the Logbook view is open or focused. Picking one reveals the Logbook view (opening it first if it isn't already), then prefills the command bar with `/<type> ` and focuses it, ready to type a title — the exact same flow as picking that command from the bar's own dropdown, just reachable without the view already being in front of you.
+
+Filter commands (`/project`, `/team`, `/tag`, `/type`, `/clear`) and `/occurrence` are deliberately not mirrored in the command palette: they only do something useful once the feed they affect is already in view, so there's no benefit to firing them blind from elsewhere in the vault — unlike creation, which is a quick-capture action you'd want mid-thought, regardless of what note you're currently in.
 
 ---
 
@@ -336,19 +339,18 @@ A filter narrows what the feed shows; all active filters AND together. Filter ax
 - Free-text query (search)
 - Projects (multi-select)
 - Teams (multi-select)
+- Tags (multi-select) — read-only filter over Obsidian's own tags, via `/tag` (see §9)
 - Type (single)
 - Type-specific attribute (single, available once a type filter is set)
 
-Tags are not a filter axis here — filtering by tag is Obsidian's own search/tag pane, not something the plugin reimplements (see §9).
-
 ### Filter chips
 
-Active filters appear as chips inside the command bar, to the left of the input: a briefcase-icon chip for projects, a people-icon chip for teams, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
+Active filters appear as chips inside the command bar, to the left of the input: a briefcase-icon chip for projects, a people-icon chip for teams, a plain chip for tags, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
 
 ### Removing filters
 
 - Click the × on a chip.
-- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: project → team → type → type attribute.
+- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: project → team → tag → type → type attribute.
 - Run `/clear`.
 
 ### Clicking things
@@ -357,8 +359,8 @@ Clicking a pill on a card almost always filters — the one exception is task/de
 
 - **Project or team pill:** clicking it adds it as an active project/team filter — on both collapsed and expanded cards.
 - **Type badge:** clicking it sets it as the active type filter — on both collapsed and expanded cards.
-- **Filterable-property pill, collapsed card** (task/design's `status`, meeting's `subtype`): clicking it applies that value as a filter.
-- **Filterable-property pill, expanded card:** behavior depends on the type. Meeting's `subtype` pill still filters, same as collapsed — it has no edit affordance. Task/design's `status` pill instead cycles to the next status and saves immediately (see §4, §5.2) — it does not filter while the card is expanded.
+- **Filterable-property pill, collapsed card** (task/design's `status`, meeting's `agenda`): clicking it applies that value as a filter.
+- **Filterable-property pill, expanded card:** every type's filterable-property pill (`status` for task/design, `agenda` for meeting) cycles to its next value and stages the change instead of filtering while the card is expanded (see §4, §5.2, §5.3).
 
 This is the primary way users discover filtering — no query syntax to learn, just click.
 
@@ -368,7 +370,7 @@ This is the primary way users discover filtering — no query syntax to learn, j
 
 ### Tags
 
-Logbook has no tag feature of its own. Tagging a note is done exactly the way it's done on any other note in the vault — Obsidian's built-in `tags` frontmatter property, inline `#tags` in the body, the Properties editor, the tag pane, and tag-aware search. The plugin doesn't read, write, display, or filter on tags anywhere; it simply never touches that property and leaves it entirely to Obsidian.
+Logbook has no tag feature of its own — tagging a note is done exactly the way it's done on any other note in the vault: Obsidian's built-in `tags` frontmatter property, inline `#tags` in the body, the Properties editor, and the tag pane all still work unmodified. The plugin never writes, edits, or displays tags. The one exception is read-only filtering: the `/tag` command (§7) reads each note's combined tag set straight from Obsidian's metadata cache (`getAllTags`, covering both frontmatter `tags` and inline `#tags`) and lets the feed be filtered down to notes carrying a given tag, the same way `/project`/`/team` filter by `projects[]`/`teams[]`.
 
 ### Projects & teams
 
@@ -393,7 +395,7 @@ A chevron action in the pane's title bar (added via `addAction`) toggles collaps
 
 ## 11. Theming
 
-The plugin has no theme of its own — it uses Obsidian's CSS variables throughout, so it automatically matches whatever theme (light, dark, or community) the user already has active. The only fixed colors are the per-type badge accents (gray/amber/dusty blue/muted plum/moss green/dusty violet), chosen to read clearly against both light and dark Obsidian themes.
+The plugin has no theme of its own — it uses Obsidian's CSS variables throughout, so it automatically matches whatever theme (light, dark, or community) the user already has active. The only fixed colors are the per-type badge accents (gray/amber/dusty blue/teal/muted plum/moss green/dusty violet), chosen to read clearly against both light and dark Obsidian themes.
 
 ---
 
@@ -437,8 +439,8 @@ Inside any project/team input:
 
 ## 14. Quick visual vocabulary
 
-- **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), muted plum (thoughts), moss green (knowledge), dusty violet (design).
-- **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `subtype` for meeting. Click behavior differs by type: `status` filters when the card is collapsed but cycles/edits when expanded; `subtype` always filters, in either state, and is never editable from the card.
+- **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), teal (recurring), muted plum (thoughts), moss green (knowledge), dusty violet (design).
+- **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `agenda` for meeting. Both filter when the card is collapsed and cycle/edit when expanded.
 - **Project chip** — briefcase icon + value, background-tinted; multiple per note.
 - **Team chip** — people icon + value, italicised; multiple per note.
 - **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
@@ -446,7 +448,7 @@ Inside any project/team input:
 - **Pinned divider** — same shape as a date divider, labeled "Pinned," always the last divider in the feed (§3).
 - **Pin glyph** — top-right corner, alongside the chevron and age pill; filled when pinned, absent entirely when not. Indicator-only while collapsed; a clickable toggle once expanded (§4).
 - **Save button** — expanded card footer; explicit equivalent of `⌘↵` (§4, §12).
-- **Change-type button** — expanded card footer; opens a dropdown of the other five types and stages a frontmatter conversion (§4).
+- **Change-type button** — expanded card footer; opens a dropdown of the other six types and stages a frontmatter conversion (§4).
 - **Collapse toggle** — a chevron view action in the pane's title bar; toggles title-only view.
 
 A consistent rule: dots and icons prefix every chip so filter context is readable without relying on color.
@@ -468,4 +470,4 @@ A consistent rule: dots and icons prefix every chip so filter context is readabl
 - **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
 - **Icons** — project (briefcase) and team (people) pill icons use Obsidian's built-in `setIcon()` API against the Lucide icon set, the same mechanism the collapse-mode title-bar action already uses (see §10) — no custom inline SVG.
 - **Type-change commits replace, not merge** — every other staged edit flushes via a `dirty` key set (only the changed keys get written into the existing frontmatter object). A staged type change can't use that path: it has to delete every key belonging to the old type's shape that isn't part of the new type's shape (e.g. a task's `status` shouldn't survive becoming a meeting) and write the new type's full field set, in the same single batched `processFrontMatter` call — a full replace of the type-specific slice of frontmatter, not an incremental patch.
-- **`pinned` follows the same omit-when-absent convention** as `theme`/`template`/`question`/`landed` — written as `pinned: true` only when set, and set to `undefined` (not `false`) to unpin, so a healthy note's frontmatter never carries a stale `pinned: false`.
+- **`pinned` follows the same omit-when-absent convention** as `question`/`landed` — written as `pinned: true` only when set, and set to `undefined` (not `false`) to unpin, so a healthy note's frontmatter never carries a stale `pinned: false`.

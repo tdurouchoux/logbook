@@ -1,7 +1,7 @@
 import { ItemView, MarkdownView, TAbstractFile, TFile, WorkspaceLeaf } from "obsidian";
 import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
-import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_SUBTYPES, activityTimestamp } from "../types";
+import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_AGENDAS, activityTimestamp } from "../types";
 import { FilterState, applyFilters, emptyFilters, hasActiveFilters } from "../filters";
 import { renderFeed, CardCache } from "./feed";
 import { CardContext } from "./card";
@@ -16,7 +16,6 @@ export class LogbookView extends ItemView {
   private feedEl!: HTMLElement;
 
   private allNotes: LogNote[] = [];
-  private templateTitles: string[] = [];
   private filters: FilterState = emptyFilters();
   private monthsBack = INITIAL_WINDOW_MONTHS;
   private loadingMore = false;
@@ -59,10 +58,10 @@ export class LogbookView extends ItemView {
         this.renderDisplay();
       },
       onCreate: (type, title) => void this.createAndShow(type, title),
-      onCreateDone: (title) => void this.createAndShow("task", title, { done: true }),
-      onCreateRecurring: (title) => void this.createAndShow("meeting", title, { recurring: true }),
+      onCreateRecurring: (title) => void this.createAndShow("recurring", title),
       onFilterProject: (name) => this.addFilterValue("projects", name),
       onFilterTeam: (name) => this.addFilterValue("teams", name),
+      onFilterTag: (name) => this.addFilterValue("tags", name),
       onFilterType: (type, attr) => {
         this.filters.type = type;
         this.filters.typeAttr = attr ?? null;
@@ -76,6 +75,7 @@ export class LogbookView extends ItemView {
       onRemoveFilterChip: (kind, value) => this.removeFilterChip(kind, value),
       getAllProjects: () => this.collectPool((n) => n.fm.projects),
       getAllTeams: () => this.collectPool((n) => n.fm.teams),
+      getAllTags: () => this.collectPool((n) => n.tags),
       getTypeAttrValues: (type) => this.typeAttrValues(type),
       getRecurringMeetings: () => this.recurringMeetings(),
       getFilters: () => this.filters,
@@ -106,7 +106,6 @@ export class LogbookView extends ItemView {
 
   private async refresh() {
     this.allNotes = await this.store.loadNotes();
-    this.templateTitles = (await this.store.listTemplates()).map((t) => t.title);
     this.renderDisplay();
   }
 
@@ -171,14 +170,21 @@ export class LogbookView extends ItemView {
     if (this.activeCloseHandler) void this.activeCloseHandler();
   }
 
-  private addFilterValue(key: "projects" | "teams", value: string) {
+  /** Backing the command-palette creation shortcuts (main.ts) — jumps straight into
+   *  the same prefilled-dock flow as picking the command from its own dropdown. */
+  focusDockCommand(key: string) {
+    this.dock.runCommand(key);
+  }
+
+  private addFilterValue(key: "projects" | "teams" | "tags", value: string) {
     if (!this.filters[key].includes(value)) this.filters[key] = [...this.filters[key], value];
     this.afterFilterChange();
   }
 
-  private removeFilterChip(kind: "project" | "team" | "type" | "typeAttr", value?: string) {
+  private removeFilterChip(kind: "project" | "team" | "tag" | "type" | "typeAttr", value?: string) {
     if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
     else if (kind === "team") this.filters.teams = this.filters.teams.filter((v) => v !== value);
+    else if (kind === "tag") this.filters.tags = this.filters.tags.filter((v) => v !== value);
     else if (kind === "type") {
       this.filters.type = null;
       this.filters.typeAttr = null;
@@ -199,13 +205,13 @@ export class LogbookView extends ItemView {
   private typeAttrValues(type: NoteType): string[] {
     if (type === "task") return TASK_STATUSES;
     if (type === "design") return DESIGN_STATUSES;
-    if (type === "meeting") return MEETING_SUBTYPES;
+    if (type === "meeting") return MEETING_AGENDAS;
     return [];
   }
 
   private recurringMeetings(): RecurringMeetingRef[] {
     return this.allNotes
-      .filter((n) => n.fm.type === "meeting" && (n.fm as any).subtype === "recurring")
+      .filter((n) => n.fm.type === "recurring")
       .sort((a, b) => activityTimestamp(b) - activityTimestamp(a))
       .map((n) => ({ title: n.fm.title, path: n.file.path }));
   }
@@ -292,7 +298,6 @@ export class LogbookView extends ItemView {
       pools: {
         projects: () => this.collectPool((n) => n.fm.projects),
         teams: () => this.collectPool((n) => n.fm.teams),
-        templates: () => this.templateTitles,
       },
       searchQuery: this.filters.query,
       onFilterProject: (p) => this.addFilterValue("projects", p),
@@ -331,22 +336,16 @@ export class LogbookView extends ItemView {
     this.renderDisplay();
   }
 
-  private async createAndShow(
-    type: NoteType,
-    titleOrQuestion: string,
-    opts?: { done?: boolean; recurring?: boolean }
-  ) {
+  private async createAndShow(type: NoteType, titleOrQuestion: string) {
     // Mirrors what ctx.expand() does when switching between two existing cards
     // (commit + collapse the previously-open one) — createAndShow sets
     // expandedPath directly rather than going through ctx.expand(), so without
     // this the previously-open card was left expanded with its edits unsaved.
     if (this.activeCloseHandler) await this.activeCloseHandler();
 
-    const file = opts?.done
-      ? await this.store.createDoneTask(titleOrQuestion)
-      : opts?.recurring
-        ? await this.store.createRecurringMeeting(titleOrQuestion)
-        : await this.store.createNote(type, titleOrQuestion);
+    const file = type === "recurring"
+      ? await this.store.createRecurringMeeting(titleOrQuestion)
+      : await this.store.createNote(type, titleOrQuestion);
 
     this.expandedPath = file.path;
     this.pendingDivider = `Writing a ${NOTE_TYPES[type].label.toLowerCase()}`;
@@ -361,9 +360,9 @@ export class LogbookView extends ItemView {
     const file = this.app.vault.getAbstractFileByPath(meeting.path);
     if (!(file instanceof TFile)) return;
     const note = this.allNotes.find((n) => n.file.path === meeting.path);
-    if (!note || note.fm.type !== "meeting") return;
+    if (!note || note.fm.type !== "recurring") return;
 
-    await this.store.addOrFindTodayOccurrence(file, note.fm as any);
+    await this.store.addOrFindTodayOccurrence(file, note.fm);
     await this.app.workspace.openLinkText(file.path, "", false);
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
