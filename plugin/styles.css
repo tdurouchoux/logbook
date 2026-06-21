@@ -638,10 +638,10 @@
 
 /* Color-code task/design status by value so its meaning reads at a glance. */
 .logbook-status-pill.is-todo {
-    color: var(--color-green, var(--text-muted));
+    color: var(--color-orange, var(--text-muted));
     background: color-mix(
         in srgb,
-        var(--color-green, var(--text-muted)) 16%,
+        var(--color-orange, var(--text-muted)) 16%,
         transparent
     );
 }
@@ -657,11 +657,7 @@
 }
 .logbook-status-pill.is-suspended {
     color: var(--text-muted);
-    background: color-mix(
-        in srgb,
-        var(--text-muted) 16%,
-        transparent
-    );
+    background: color-mix(in srgb, var(--text-muted) 16%, transparent);
     opacity: 0.85;
 }
 .logbook-status-pill.is-in-review {
