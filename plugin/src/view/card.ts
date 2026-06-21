@@ -12,6 +12,7 @@ import {
   isKnowledge,
   isDesign,
   convertType,
+  MEETING_AGENDAS,
 } from "../types";
 import { NoteStore } from "../note-store";
 import { relativeTime } from "../utils";
@@ -423,12 +424,12 @@ function renderPillLine(parent: HTMLElement, label: string): HTMLElement {
 }
 
 /**
- * The type's filterable-property pill (design.md §2, §4): task/design's `status`
- * filters when collapsed but cycles (and stages, design.md §4) when expanded;
- * meeting's `agenda` always filters, in either state, and is never editable.
- * Reused as a single DOM node relocated between the collapsed top row and the
- * expanded field block, so its click behavior is read from `card`'s current
- * `is-expanded` class at click time rather than baked in at render time.
+ * The type's filterable-property pill (design.md §2, §4): filters when collapsed,
+ * cycles through the enum (and stages, design.md §4) when expanded — task/design's
+ * `status`, meeting's `agenda`. Reused as a single DOM node relocated between the
+ * collapsed top row and the expanded field block, so its click behavior is read
+ * from `card`'s current `is-expanded` class at click time rather than baked in at
+ * render time.
  */
 function renderFilterAttrPill(
   parent: HTMLElement,
@@ -441,40 +442,27 @@ function renderFilterAttrPill(
   if (!typeInfo.filterAttr) return;
   const { key } = typeInfo.filterAttr;
 
-  if (isMeeting(note)) {
-    const value = note.fm.agenda;
-    const pill = parent.createEl("span", {
-      cls: `logbook-pill logbook-filter-attr-pill logbook-agenda-pill is-${value}`,
-      text: value,
-    });
-    pill.addEventListener("click", (e) => {
-      e.stopPropagation();
+  if (!(isTask(note) || isDesign(note) || isMeeting(note))) return;
+  const cycle = isTask(note) ? TASK_STATUSES : isDesign(note) ? DESIGN_STATUSES : MEETING_AGENDAS;
+  const pillClass = isMeeting(note) ? "logbook-agenda-pill" : "logbook-status-pill";
+  let value: string = (note.fm as unknown as Record<string, string>)[key];
+  const pill = parent.createEl("span", {
+    cls: `logbook-pill logbook-filter-attr-pill ${pillClass} is-${value}`,
+    text: value,
+  });
+  pill.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!card.hasClass("is-expanded")) {
       ctx.onFilterType(note.fm.type, { key, value });
-    });
-    return;
-  }
-
-  if (isTask(note) || isDesign(note)) {
-    const cycle = isTask(note) ? TASK_STATUSES : DESIGN_STATUSES;
-    let status: string = note.fm.status;
-    const pill = parent.createEl("span", {
-      cls: `logbook-pill logbook-filter-attr-pill logbook-status-pill is-${status}`,
-      text: status,
-    });
-    pill.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (!card.hasClass("is-expanded")) {
-        ctx.onFilterType(note.fm.type, { key, value: status });
-        return;
-      }
-      const idx = (cycle as string[]).indexOf(status);
-      status = cycle[(idx + 1) % cycle.length];
-      (note.fm as any).status = status;
-      dirty.add("status");
-      pill.textContent = status;
-      pill.className = `logbook-pill logbook-filter-attr-pill logbook-status-pill is-${status}`;
-    });
-  }
+      return;
+    }
+    const idx = (cycle as string[]).indexOf(value);
+    value = cycle[(idx + 1) % cycle.length];
+    (note.fm as unknown as Record<string, string>)[key] = value;
+    dirty.add(key);
+    pill.textContent = value;
+    pill.className = `logbook-pill logbook-filter-attr-pill ${pillClass} is-${value}`;
+  });
 }
 
 function renderTypeFields(

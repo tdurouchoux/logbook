@@ -168,7 +168,7 @@ other type-specific fields…
   - The filterable-property pill, project pills, and team pills each get their own line, with the pill type's name as a label on the left (`Status`/`Agenda`, `Projects`, `Teams`) — the same label-on-the-left layout as the other type-specific fields below them. Their behavior on click depends on the field:
     - **Project and team pills:** clicking the pill itself (not its `×`) still applies it as a filter, same as collapsed. The `×` removes the value; a small **`+`** button at the end of the line is the only add affordance — clicking it reveals a free-text input (autofocused) with autocomplete, `Enter`/`,` to add (the input stays open afterward so several values can be added in a row), `Backspace` on an empty input removes the last value, and it collapses back to `+` on blur or `Esc`.
     - **Task/design's `status` pill:** no longer filters while expanded — clicking it instead cycles to the next status (`todo → done → suspended → todo`, or `exploring → in-review → decided → exploring`); like every other field, the new value is staged and only written when the card closes. There's no `×` or removal — every task/design note always has a status.
-    - **Meeting's `agenda` pill:** stays read-only/filter-only even while expanded — clicking it applies the agenda filter, exactly as collapsed. Unlike status, agenda's six values aren't a cycle, so there's no click-to-edit affordance on the card; changing it means picking a new value via the Properties editor or `processFrontMatter` directly.
+    - **Meeting's `agenda` pill:** behaves exactly like task/design's `status` pill above — cycles to the next value (`meetup → presentation → workshop → crisis → decision → other → meetup`) instead of filtering while expanded; like every other field, the new value is staged and only written when the card closes.
   - Remaining type-specific fields with no pill treatment — thoughts' `question`/`landed`, meeting/recurring's `attendees`, knowledge's `techStack` (not filterable, see §2) — are plain labeled inputs/pickers, not pills, and carry no filter-on-click behavior.
 - No body preview while expanded — see above.
 - Footer, left to right: the hint text (`⌘↵ save / esc collapse`), then a **Change type** button, then an explicit **Save** button, then a trash-bin button pinned to the bottom-right corner of the card — delete stays the absolute last/rightmost control, same as before.
@@ -226,7 +226,7 @@ An action with a state.
 
 Notes from a single conversation.
 
-- `agenda`: `meetup`, `presentation`, `workshop`, `crisis`, `decision`, or `other`. The meeting type's filterable attribute (see §2, §4): it renders as a pill on every meeting card, clicking it always applies an `agenda` filter — collapsed or expanded — and it's not editable from the card (see §4).
+- `agenda`: `meetup`, `presentation`, `workshop`, `crisis`, `decision`, or `other`. The meeting type's filterable attribute (see §2, §4): on the collapsed card, clicking the pill applies an `agenda` filter; on the expanded card, clicking it instead cycles to the next value and stages the change, the same way task/design's `status` pill behaves (see §4, §5.2).
 - `attendees[]` (first names, shown inline on the card).
 - Badge color: dusty blue.
 
@@ -360,7 +360,7 @@ Clicking a pill on a card almost always filters — the one exception is task/de
 - **Project or team pill:** clicking it adds it as an active project/team filter — on both collapsed and expanded cards.
 - **Type badge:** clicking it sets it as the active type filter — on both collapsed and expanded cards.
 - **Filterable-property pill, collapsed card** (task/design's `status`, meeting's `agenda`): clicking it applies that value as a filter.
-- **Filterable-property pill, expanded card:** behavior depends on the type. Meeting's `agenda` pill still filters, same as collapsed — it has no edit affordance. Task/design's `status` pill instead cycles to the next status and saves immediately (see §4, §5.2) — it does not filter while the card is expanded.
+- **Filterable-property pill, expanded card:** every type's filterable-property pill (`status` for task/design, `agenda` for meeting) cycles to its next value and stages the change instead of filtering while the card is expanded (see §4, §5.2, §5.3).
 
 This is the primary way users discover filtering — no query syntax to learn, just click.
 
@@ -440,7 +440,7 @@ Inside any project/team input:
 ## 14. Quick visual vocabulary
 
 - **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), teal (recurring), muted plum (thoughts), moss green (knowledge), dusty violet (design).
-- **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `agenda` for meeting. Click behavior differs by type: `status` filters when the card is collapsed but cycles/edits when expanded; `agenda` always filters, in either state, and is never editable from the card.
+- **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `agenda` for meeting. Both filter when the card is collapsed and cycle/edit when expanded.
 - **Project chip** — briefcase icon + value, background-tinted; multiple per note.
 - **Team chip** — people icon + value, italicised; multiple per note.
 - **Active filter chips** — same shapes, filled with the accent color to signal "filtering by this".
