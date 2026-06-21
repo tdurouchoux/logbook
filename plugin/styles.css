@@ -79,20 +79,9 @@
     background: var(--background-modifier-hover);
 }
 
-/* Expanded card becomes its own filled, bounded block instead of a flat row
-   — the divider hairline would otherwise sit awkwardly between the card's
-   own internal separator (.logbook-sep) and the next row's, making it
-   unclear where the note actually ends. */
-.logbook-card.is-expanded {
-    background: var(--background-secondary);
-    border-bottom-color: transparent;
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin: 6px 0;
-}
-.logbook-card.is-expanded:hover {
-    background: var(--background-secondary);
-}
+/* Expanded card stays a flat row like the rest of the list — only the
+   internal separator lines (header/properties, properties/footer) are
+   dropped so they don't read as extra card boundaries. */
 
 @keyframes lb-fadein {
     from {
@@ -240,7 +229,6 @@
 
 .logbook-sep {
     border: none;
-    border-top: 1px solid var(--background-modifier-border);
     margin: 10px 0 12px;
 }
 
@@ -453,7 +441,6 @@
     align-items: center;
     margin-top: 12px;
     padding-top: 10px;
-    border-top: 1px solid var(--background-modifier-border);
 }
 
 /* No body preview while expanded — expanding opens the real note in
