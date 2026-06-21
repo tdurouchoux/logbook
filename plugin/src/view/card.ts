@@ -1,4 +1,4 @@
-import { App, Menu, setIcon } from "obsidian";
+import { App, Menu, setIcon, renderMatches } from "obsidian";
 import {
   LogNote,
   NoteType,
@@ -16,7 +16,7 @@ import {
 } from "../types";
 import { NoteStore } from "../note-store";
 import { relativeTime } from "../utils";
-import { highlight } from "../filters";
+import { fuzzyMatchRanges } from "../filters";
 import { renderPicker } from "./pickers";
 
 export interface CardContext {
@@ -194,7 +194,11 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const titleRow = header.createDiv("logbook-title-row");
   let questionEl: HTMLElement | null = null;
   const titleEl = titleRow.createEl("div", { cls: "logbook-title" });
-  titleEl.innerHTML = ctx.searchQuery ? highlight(note.fm.title, ctx.searchQuery) : escapeHtml(note.fm.title);
+  if (ctx.searchQuery) {
+    renderMatches(titleEl, note.fm.title, fuzzyMatchRanges(note.fm.title, ctx.searchQuery));
+  } else {
+    titleEl.textContent = note.fm.title;
+  }
 
   let occurrenceInfoEl: HTMLElement | null = null;
 
@@ -203,7 +207,11 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   if (note.body) {
     const plain = note.body.replace(/^#{1,4}\s+/gm, "").replace(/[*_`>#]/g, "").slice(0, 160);
     const preview = previewWrap.createEl("div", { cls: "logbook-preview" });
-    preview.innerHTML = ctx.searchQuery ? highlight(plain, ctx.searchQuery) : escapeHtml(plain);
+    if (ctx.searchQuery) {
+      renderMatches(preview, plain, fuzzyMatchRanges(plain, ctx.searchQuery));
+    } else {
+      preview.textContent = plain;
+    }
   }
 
   // ── Expanded section ──────────────────────────────────────────────────
@@ -527,8 +535,4 @@ function renderTypeFields(
       },
     });
   }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

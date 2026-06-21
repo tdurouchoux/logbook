@@ -270,7 +270,7 @@ Technical design of part of a project.
 
 The feed never renders a note's body as markdown — only a plain-text preview (markdown syntax stripped beyond headings/bold/italic/links, clamped to two lines), shown only on the collapsed card. Expanding a card opens the real note in Obsidian's native editor instead (see §4, "Opening in Obsidian's editor"), so there's nothing left to preview once it's open. Full markdown support — headings, bold/italic/strikethrough, code blocks with syntax highlighting, task checkboxes, GFM tables, links, Obsidian-style callouts, and everything else — is simply whatever Obsidian's own native editor and reading view already provide. The plugin does no rendering work for any of it.
 
-When a search/filter query is active, matching terms are wrapped in `<mark>` in the body preview — the only place a preview is shown, since it's collapsed-only.
+When a search/filter query is active, matched characters are highlighted in the body preview (via Obsidian's own `renderMatches`, the same primitive its quick switcher uses) — the only place a preview is shown, since it's collapsed-only.
 
 ---
 
@@ -280,7 +280,7 @@ A single input at the bottom of the view, with two modes.
 
 ### Search mode (default)
 
-- Free text is a search query: matches AND across whitespace-separated terms, checked against `title`, `body`, `projects`, `teams`, and every type-specific field. It does not match tags — free-text tag search is still Obsidian's own search/tag pane's job; the plugin's only tag-aware affordance is the dedicated `/tag` filter command (see §9).
+- Free text is a search query: each whitespace-separated term is fuzzy-matched (typo-tolerant, out-of-order-character-tolerant — Obsidian's own `prepareFuzzySearch`, the same matcher behind its quick switcher) independently, and all terms must match (AND) somewhere across `title`, `body`, `projects`, `teams`, and every type-specific field, treated as one combined haystack per note. It does not match tags — free-text tag search is still Obsidian's own search/tag pane's job; the plugin's only tag-aware affordance is the dedicated `/tag` filter command (see §9). A fuzzy match is filter-only: it doesn't change the feed's sort order, which stays the same chronological/day-grouped order described in §3 regardless of which notes a query lets through.
 - Matches are highlighted (see §6) in card previews while the query is active.
 - When filters are active, the bar shows their chips to the left of the input (see §8).
 - Free text never creates a note — note creation only happens through `/` commands.
