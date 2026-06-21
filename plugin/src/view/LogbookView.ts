@@ -259,6 +259,11 @@ export class LogbookView extends ItemView {
           this.activeCloseHandler = null;
         }
         if (this.pendingNotePath === path) this.pendingNotePath = undefined;
+        // Unfreezing sortKey above only takes effect on the next render — a body-only
+        // edit (typed straight into Obsidian's editor) never goes through the store's
+        // write queue, so there's no onSettled-triggered refresh() to re-sort by the
+        // now-current mtime like a frontmatter commit gets. Force that re-render here.
+        this.renderDisplay();
       },
       discardEdits: (path) => void this.discardEdits(path),
       deleteNote: (path) => void this.deleteNote(path),
