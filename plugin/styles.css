@@ -608,8 +608,8 @@
 
 /* ── Filterable-attribute pill (status / agenda) ───────────────────────── */
 /* Shared base for the type's filterable-property pill (design.md §2, §4).
-   Always clickable: status filters when collapsed, cycles when expanded;
-   agenda always filters, never edits — see renderFilterAttrPill in card.ts. */
+   Always clickable: filters when collapsed, cycles through the enum and
+   stages the change when expanded — see renderFilterAttrPill in card.ts. */
 .logbook-filter-attr-pill {
     font-size: 10.5px;
     font-weight: 600;
@@ -641,11 +641,28 @@
     background: color-mix(in srgb, var(--color-yellow, var(--text-muted)) 16%, transparent);
 }
 
-/* Meeting agenda: tie to the card's own type color rather than a semantic
-   status color, since the six agenda values aren't a progression like status. */
-.logbook-agenda-pill {
-    color: var(--card-type-color, var(--text-muted));
-    background: color-mix(in srgb, var(--card-type-color, var(--text-muted)) 16%, transparent);
+/* Meeting agenda: color-coded by value like status, drawing from the rest of
+   the palette since agenda isn't a green/orange/yellow progression. `other`
+   stays uncolored, same as status's `todo`/`in-progress`. */
+.logbook-agenda-pill.is-crisis {
+    color: var(--color-red, var(--text-muted));
+    background: color-mix(in srgb, var(--color-red, var(--text-muted)) 16%, transparent);
+}
+.logbook-agenda-pill.is-decision {
+    color: var(--color-green, var(--text-muted));
+    background: color-mix(in srgb, var(--color-green, var(--text-muted)) 16%, transparent);
+}
+.logbook-agenda-pill.is-workshop {
+    color: var(--color-purple, var(--text-muted));
+    background: color-mix(in srgb, var(--color-purple, var(--text-muted)) 16%, transparent);
+}
+.logbook-agenda-pill.is-presentation {
+    color: var(--color-cyan, var(--text-muted));
+    background: color-mix(in srgb, var(--color-cyan, var(--text-muted)) 16%, transparent);
+}
+.logbook-agenda-pill.is-meetup {
+    color: var(--color-blue, var(--text-muted));
+    background: color-mix(in srgb, var(--color-blue, var(--text-muted)) 16%, transparent);
 }
 
 .logbook-card.is-done .logbook-title {
