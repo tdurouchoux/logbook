@@ -70,24 +70,25 @@ export class Dock {
     this.chipsEl.empty();
     const f = this.cb.getFilters();
     for (const p of f.projects) {
-      this.addChip(p, () => this.cb.onRemoveFilterChip("project", p));
+      this.addChip("project", p, () => this.cb.onRemoveFilterChip("project", p));
     }
     for (const t of f.teams) {
-      this.addChip(t, () => this.cb.onRemoveFilterChip("team", t), true);
+      this.addChip("team", t, () => this.cb.onRemoveFilterChip("team", t), true);
     }
     if (f.type) {
-      this.addChip(NOTE_TYPES[f.type].label, () => this.cb.onRemoveFilterChip("type"));
+      this.addChip("type", NOTE_TYPES[f.type].label, () => this.cb.onRemoveFilterChip("type"));
     }
-    if (f.typeAttr) {
-      this.addChip(f.typeAttr.value, () => this.cb.onRemoveFilterChip("typeAttr"));
+    if (f.typeAttr && f.type) {
+      const attrLabel = NOTE_TYPES[f.type].filterAttr?.label ?? "filter";
+      this.addChip(attrLabel.toLowerCase(), f.typeAttr.value, () => this.cb.onRemoveFilterChip("typeAttr"));
     }
   }
 
-  private addChip(text: string, onRemove: () => void, italic = false) {
+  private addChip(kind: string, value: string, onRemove: () => void, italic = false) {
     const chip = this.chipsEl.createEl("span", { cls: "logbook-pill logbook-filter-chip" });
-    if (italic) chip.addClass("is-italic");
-    chip.createSpan({ text });
-    const x = chip.createEl("button", { text: "×" });
+    chip.createSpan({ cls: "logbook-filter-chip-kind", text: kind });
+    chip.createSpan({ cls: "logbook-filter-chip-value", text: value }).toggleClass("is-italic", italic);
+    const x = chip.createEl("button", { cls: "logbook-chip-remove", text: "×" });
     x.addEventListener("click", onRemove);
     chip.addEventListener("click", (e) => {
       if (e.target === x) return;

@@ -15,7 +15,7 @@
     padding: 20px 28px 12px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 0;
 }
 
 .logbook-empty {
@@ -36,12 +36,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    color: var(--text-faint);
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin: 12px 0 4px;
+    margin: 22px 0 12px;
     user-select: none;
 }
 .logbook-divider::before,
@@ -49,30 +44,48 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--background-modifier-border);
+    background: var(--background-modifier-border-hover);
+}
+.logbook-divider span {
+    flex-shrink: 0;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--background-modifier-hover);
+    padding: 3px 11px;
+    border-radius: 999px;
 }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 
 .logbook-card {
     position: relative;
-    background: var(--background-secondary);
-    border: 1px solid var(--background-modifier-border);
-    border-left: 3px solid
-        var(--card-type-color, var(--background-modifier-border));
-    border-radius: 10px;
-    padding: 11px 16px 10px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--background-modifier-border);
+    border-radius: 0;
+    padding: 12px 4px;
     cursor: pointer;
     transition:
-        box-shadow 0.12s ease,
-        border-color 0.12s ease;
+        background-color 0.12s ease,
+        border-color 0.12s ease,
+        padding 0.12s ease,
+        margin 0.12s ease;
     animation: lb-fadein 0.15s ease;
 }
 .logbook-card:hover {
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-    border-top-color: var(--background-modifier-border-hover);
-    border-right-color: var(--background-modifier-border-hover);
-    border-bottom-color: var(--background-modifier-border-hover);
+    background: var(--background-modifier-hover);
+}
+
+/* Expanded card stays a flat row like the rest of the list — only the
+   internal separator lines (header/properties, properties/footer) are
+   dropped so they don't read as extra card boundaries. A thin accent bar
+   on the left (Bear's selected-row treatment) marks which one is open. */
+.logbook-card.is-expanded {
+    border-left: 3px solid var(--interactive-accent);
+    padding-left: 13px;
 }
 
 @keyframes lb-fadein {
@@ -102,8 +115,8 @@
 }
 
 .logbook-title {
-    font-size: 14.5px;
-    font-weight: 500;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--text-normal);
     margin-bottom: 3px;
     line-height: 1.4;
@@ -221,7 +234,6 @@
 
 .logbook-sep {
     border: none;
-    border-top: 1px solid var(--background-modifier-border);
     margin: 10px 0 12px;
 }
 
@@ -434,7 +446,6 @@
     align-items: center;
     margin-top: 12px;
     padding-top: 10px;
-    border-top: 1px solid var(--background-modifier-border);
 }
 
 /* No body preview while expanded — expanding opens the real note in
@@ -458,12 +469,12 @@
     width: 100%;
     box-sizing: border-box;
     border: 1px solid var(--background-modifier-border);
-    border-radius: 10px;
+    border-radius: 999px;
     background: var(--background-secondary);
     color: var(--text-normal);
-    padding: 0 14px;
+    padding: 0 18px;
     font-size: 14px;
-    height: 44px;
+    height: 50px;
     outline: none;
     transition:
         border-color 0.15s,
@@ -471,8 +482,8 @@
 }
 .logbook-input:focus {
     border-color: var(--interactive-accent);
-    box-shadow: 0 0 0 2px
-        color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+    box-shadow: 0 0 0 3px
+        color-mix(in srgb, var(--interactive-accent) 16%, transparent);
 }
 .logbook-input::placeholder {
     color: var(--text-faint);
@@ -797,41 +808,31 @@
     display: none;
 }
 .logbook-filter-chip {
-    gap: 6px;
+    gap: 5px;
     font-size: 11.5px;
     font-weight: 500;
-    color: var(--text-on-accent);
-    background: var(--interactive-accent);
-    padding: 4px 7px 4px 11px;
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+    border: 1px solid var(--background-modifier-border);
+    padding: 3px 6px 3px 11px;
     cursor: pointer;
+    transition: border-color 0.12s ease, background-color 0.12s ease;
 }
 .logbook-filter-chip:hover {
-    background: var(--interactive-accent-hover);
+    border-color: var(--interactive-accent);
 }
-.logbook-filter-chip.is-italic {
+.logbook-filter-chip-kind {
+    color: var(--text-faint);
+}
+.logbook-filter-chip-kind::after {
+    content: ":";
+}
+.logbook-filter-chip-value {
+    font-weight: 600;
+    color: var(--interactive-accent);
+}
+.logbook-filter-chip-value.is-italic {
     font-style: italic;
-}
-.logbook-filter-chip button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: inherit;
-    opacity: 0.8;
-    cursor: pointer;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    font-size: 12px;
-    transition: background-color 0.1s, opacity 0.1s, transform 0.08s;
-}
-.logbook-filter-chip button:hover {
-    opacity: 1;
-    background: rgba(0, 0, 0, 0.18);
-}
-.logbook-filter-chip button:active {
-    transform: scale(0.85);
 }
 
 .logbook-input-row {
@@ -848,8 +849,9 @@
     min-height: 1px;
 }
 
-.logbook-divider-pending {
+.logbook-divider-pending span {
     color: var(--interactive-accent);
+    background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
 }
 
 /* ── Collapse mode ───────────────────────────────────────────────────────── */

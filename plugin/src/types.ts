@@ -34,7 +34,7 @@ export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
     desc: "Notes from a conversation",
     filterAttr: { key: "subtype", label: "Subtype" },
   },
-  thoughts: { label: "Thoughts", color: "#8a5cb2", desc: "Exploration of an idea" },
+  thoughts: { label: "Thoughts", color: "#bf5680", desc: "Exploration of an idea" },
   knowledge: {
     label: "Knowledge",
     color: "#7a9956",
