@@ -5,7 +5,7 @@ import {
   NoteType,
   MeetingFrontmatter,
 } from "./types";
-import { generateId, slugify, todayISO } from "./utils";
+import { generateId, sanitizeFilename, todayISO } from "./utils";
 import { LogbookSettings } from "./settings";
 
 /**
@@ -22,11 +22,21 @@ export class NoteStore {
   private suppressedUntil = new Map<string, number>();
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private settleCb: (() => void) | null = null;
+  /** Destination paths of renames this store itself just performed (renameTitle) —
+   *  lets the view's own vault "rename" listener tell those apart from an
+   *  external rename (e.g. editing Obsidian's inline title) it needs to react to. */
+  private pendingSelfRenames = new Set<string>();
 
   constructor(private app: App, private settings: LogbookSettings) {}
 
   get folder(): string {
     return this.settings.folder;
+  }
+
+  /** True (and consumes the flag) iff `path` is the destination of a rename this
+   *  store itself just performed. */
+  consumeSelfRename(path: string): boolean {
+    return this.pendingSelfRenames.delete(path);
   }
 
   /** True while any write is mid-flight — used to skip a feed refresh that would tear down an open card. */
@@ -106,11 +116,11 @@ export class NoteStore {
     }
 
     const title = type === "thoughts" ? titleOrQuestion || "Untitled thought" : titleOrQuestion;
-    const slug = slugify(title);
-    let path = normalizePath(`${folder}/${slug}.md`);
+    const filename = sanitizeFilename(title);
+    let path = normalizePath(`${folder}/${filename}.md`);
     let i = 1;
     while (this.app.vault.getAbstractFileByPath(path)) {
-      path = normalizePath(`${folder}/${slug}_${i++}.md`);
+      path = normalizePath(`${folder}/${filename} ${i++}.md`);
     }
 
     const now = new Date().toISOString();
@@ -222,9 +232,10 @@ export class NoteStore {
   }
 
   async renameTitle(file: TFile, newTitle: string): Promise<void> {
-    const slug = slugify(newTitle);
-    const newPath = normalizePath(`${file.parent?.path ?? this.folder}/${slug}.md`);
+    const filename = sanitizeFilename(newTitle);
+    const newPath = normalizePath(`${file.parent?.path ?? this.folder}/${filename}.md`);
     if (newPath !== file.path && !this.app.vault.getAbstractFileByPath(newPath)) {
+      this.pendingSelfRenames.add(newPath);
       await this.app.fileManager.renameFile(file, newPath);
     }
     await this.updateFrontmatter(file, (fm) => {
@@ -235,6 +246,18 @@ export class NoteStore {
   /** Manual delete from the card's trash button (design.md §4) — trash, never hard-delete. */
   async deleteNote(file: TFile): Promise<void> {
     await this.app.vault.trash(file, true);
+  }
+
+  /** Replaces frontmatter wholesale for a type change (design.md §15) — unlike updateFrontmatter's
+   *  key-by-key mutator, this drops every key not present in newFm's shape. */
+  async changeType(file: TFile, newFm: NoteFrontmatter): Promise<void> {
+    await this.updateFrontmatter(file, (raw) => {
+      const newKeys = new Set(Object.keys(newFm));
+      for (const key of Object.keys(raw)) {
+        if (!newKeys.has(key)) delete raw[key];
+      }
+      Object.assign(raw, newFm);
+    });
   }
 
   /** Trash (never hard-delete) draft notes older than 7 days, per design.md §5.1. */
@@ -259,6 +282,7 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
     projects: Array.isArray(raw.projects) ? raw.projects.map(String) : [],
     teams: Array.isArray(raw.teams) ? raw.teams.map(String) : [],
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(file.stat.ctime).toISOString(),
+    pinned: typeof raw.pinned === "boolean" ? raw.pinned : undefined,
   };
 
   switch (type) {

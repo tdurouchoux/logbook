@@ -15,6 +15,10 @@ export interface FeedRenderOptions {
   // card whose real mtime just changed gets bucketed into a different day-group
   // (and that whole group reordered) even though its position in `notes` was held.
   activityOf(note: LogNote): number;
+  // Pre-sorted (oldest first) by the caller, exempt from history-window pagination
+  // (design.md §3) — rendered as one flat list under a single "Pinned" divider,
+  // always last, with no day sub-grouping.
+  pinnedNotes: LogNote[];
 }
 
 interface CardCacheEntry {
@@ -47,7 +51,7 @@ export function renderFeed(feedEl: HTMLElement, opts: FeedRenderOptions, cardCtx
     postAttach.push(() => observeSentinel(sentinel, opts.onLoadMore));
   }
 
-  if (opts.notes.length === 0) {
+  if (opts.notes.length === 0 && opts.pinnedNotes.length === 0) {
     desired.push(buildEmptyState(opts.filters));
   } else {
     for (const [label, group] of groupByDay(opts.notes, opts.activityOf)) {
@@ -60,6 +64,14 @@ export function renderFeed(feedEl: HTMLElement, opts: FeedRenderOptions, cardCtx
 
     if (opts.pendingDivider && opts.pendingNotePath) {
       desired.push(buildDivider(opts.pendingDivider, true));
+    }
+
+    if (opts.pinnedNotes.length) {
+      desired.push(buildDivider("Pinned", false, true));
+      for (const note of opts.pinnedNotes) {
+        livePaths.add(note.file.path);
+        desired.push(resolveCard(note, cardCtx, cache));
+      }
     }
   }
 
@@ -98,9 +110,11 @@ function cardSignature(note: LogNote, searchQuery: string): string {
   return JSON.stringify([note.fm, note.body, note.file.stat.mtime, searchQuery]);
 }
 
-function buildDivider(label: string, pending = false): HTMLElement {
+function buildDivider(label: string, pending = false, pinned = false): HTMLElement {
   const divider = document.createElement("div");
-  divider.className = pending ? "logbook-divider logbook-divider-pending" : "logbook-divider";
+  divider.className = "logbook-divider";
+  if (pending) divider.className += " logbook-divider-pending";
+  if (pinned) divider.className += " logbook-divider-pinned";
   const span = document.createElement("span");
   span.textContent = label;
   divider.appendChild(span);

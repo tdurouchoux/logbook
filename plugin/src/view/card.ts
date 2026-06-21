@@ -1,4 +1,4 @@
-import { App, setIcon } from "obsidian";
+import { App, Menu, setIcon } from "obsidian";
 import {
   LogNote,
   NoteType,
@@ -10,6 +10,7 @@ import {
   isThoughts,
   isKnowledge,
   isDesign,
+  convertType,
 } from "../types";
 import { NoteStore } from "../note-store";
 import { relativeTime } from "../utils";
@@ -40,14 +41,10 @@ export function buildCard(note: LogNote, ctx: CardContext): HTMLElement {
 }
 
 function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
-  const typeInfo = NOTE_TYPES[note.fm.type] ?? NOTE_TYPES.draft;
   const isExpanded = ctx.isExpanded(note.file.path);
 
   const card = parent.createDiv("logbook-card");
-  card.style.setProperty("--card-type-color", typeInfo.color);
   if (isExpanded) card.addClass("is-expanded");
-  if (isTask(note) && note.fm.status === "done") card.addClass("is-done");
-  if (isTask(note) && note.fm.status === "suspended") card.addClass("is-suspended");
 
   // Nothing is written to disk while a field is being edited (design.md §4) — every
   // handler below mutates `note.fm` + its own DOM immediately, then records what
@@ -55,12 +52,13 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const dirty = new Set<string>();
   let titleDirty = false;
   let templateDirty = false;
+  let typeDirty = false;
 
   // ── Collapsed header ──────────────────────────────────────────────────
   const header = card.createDiv("logbook-card-header");
   const top = header.createDiv("logbook-card-top");
 
-  const badge = renderBadge(top, note.fm.type);
+  const badge = top.createEl("span", { cls: "logbook-badge" });
   badge.addEventListener("click", (e) => {
     e.stopPropagation();
     ctx.onFilterType(note.fm.type);
@@ -72,11 +70,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   // gets its own "line" (label + content) once expanded; while collapsed the
   // lines collapse back into one flowing row (see .logbook-pill-line CSS).
   const pillsRow = top.createDiv("logbook-pills-row");
-
-  if (typeInfo.filterAttr) {
-    const filterLine = renderPillLine(pillsRow, typeInfo.filterAttr.label);
-    renderFilterAttrPill(filterLine, note, ctx, card, dirty);
-  }
+  let filterLineEl: HTMLElement | null = null;
 
   const projectLine = renderPillLine(pillsRow, "Projects");
   const projectRow = projectLine.createDiv("logbook-project-row");
@@ -120,6 +114,24 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     });
   });
 
+  // Pin glyph (design.md §4): same node in both states — a pure indicator while
+  // collapsed (hidden entirely when not pinned, via CSS), a clickable toggle once
+  // expanded. Lives in the top-right corner cluster alongside chevron/age, ahead
+  // of them so it doesn't drift when the pills row comes and goes.
+  const pinIndicator = top.createEl("span", { cls: "logbook-pin-indicator", attr: { "aria-label": "Pinned" } });
+  setIcon(pinIndicator, "pin");
+  pinIndicator.addEventListener("click", (e) => {
+    // While collapsed it's display-only — don't intercept the click, so it
+    // falls through to the card's own handler and expands like normal.
+    if (!card.hasClass("is-expanded")) return;
+    e.stopPropagation();
+    const next = !note.fm.pinned;
+    note.fm.pinned = next || undefined;
+    dirty.add("pinned");
+    pinIndicator.toggleClass("is-pinned", next);
+  });
+  pinIndicator.toggleClass("is-pinned", !!note.fm.pinned);
+
   const chevron = top.createEl("span", { cls: "logbook-chevron" });
   chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -145,7 +157,13 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
       templateDirty = false;
       await ctx.store.setMeetingTemplate(note.file, note.fm, note.fm.template ?? "");
     }
-    if (dirty.size > 0) {
+    if (typeDirty) {
+      // Replace-not-merge (design.md §15): a type change drops every old-type
+      // field, so it supersedes the normal key-by-key dirty write below.
+      typeDirty = false;
+      dirty.clear();
+      await ctx.store.changeType(note.file, note.fm);
+    } else if (dirty.size > 0) {
       const keys = Array.from(dirty);
       dirty.clear();
       await ctx.store.updateFrontmatter(note.file, (raw) => {
@@ -178,29 +196,14 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   };
 
   const titleRow = header.createDiv("logbook-title-row");
-  if (isThoughts(note) && note.fm.question) {
-    titleRow.createEl("div", { cls: "logbook-question", text: note.fm.question });
-  }
+  let questionEl: HTMLElement | null = null;
   const titleEl = titleRow.createEl("div", { cls: "logbook-title" });
   titleEl.innerHTML = ctx.searchQuery ? highlight(note.fm.title, ctx.searchQuery) : escapeHtml(note.fm.title);
 
-  if (isMeeting(note) && note.fm.subtype === "recurring") {
-    const n = note.fm.occurrences?.length ?? 0;
-    const latest = note.fm.occurrences?.[0];
-    header.createEl("div", {
-      cls: "logbook-occurrence-info",
-      text: `${n} occurrence${n === 1 ? "" : "s"}${latest ? ` · latest ${latest}` : ""}`,
-    });
-  }
+  let occurrenceInfoEl: HTMLElement | null = null;
 
   const previewWrap = header.createDiv("logbook-card-preview-wrap");
-  if (isKnowledge(note) && note.fm.techStack.length) {
-    const stackRow = previewWrap.createDiv("logbook-stack-row");
-    stackRow.createEl("span", { cls: "logbook-stack-label", text: "STACK" });
-    for (const tech of note.fm.techStack) {
-      stackRow.createEl("span", { cls: "logbook-pill logbook-stack-chip", text: tech });
-    }
-  }
+  let stackRowEl: HTMLElement | null = null;
   if (note.body) {
     const plain = note.body.replace(/^#{1,4}\s+/gm, "").replace(/[*_`>#]/g, "").slice(0, 160);
     const preview = previewWrap.createEl("div", { cls: "logbook-preview" });
@@ -233,10 +236,39 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
 
   // Type-specific editable fields (status/subtype live in pillsRow, not here)
   const typeFieldsEl = expandInner.createDiv("logbook-type-fields");
-  renderTypeFields(typeFieldsEl, note, ctx, dirty, () => (templateDirty = true), onFieldKeydown);
 
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
+
+  // Change type (design.md §4, §15): opens a small menu of the other five types;
+  // picking one stages a conversion via convertType() and re-renders the
+  // type-dependent UI in place — nothing is written until the card closes.
+  const typeBtn = expandFooter.createEl("button", {
+    cls: "logbook-type-btn",
+    attr: { type: "button" },
+  });
+  typeBtn.createSpan({ text: "Change type" });
+  setIcon(typeBtn.createSpan({ cls: "logbook-type-btn-chevron" }), "chevron-down");
+  typeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const menu = new Menu();
+    for (const t of Object.keys(NOTE_TYPES) as NoteType[]) {
+      if (t === note.fm.type) continue;
+      menu.addItem((item) => {
+        item.setTitle(NOTE_TYPES[t].label);
+        item.onClick(() => applyTypeChange(t));
+      });
+    }
+    menu.showAtMouseEvent(e);
+  });
+
+  // Save (design.md §4, §12): explicit equivalent of ⌘↵, since the global hotkey
+  // has proven unreliable depending on where keyboard focus lands.
+  const saveBtn = expandFooter.createEl("button", { cls: "logbook-save-btn", attr: { type: "button" }, text: "Save" });
+  saveBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    void closeAndSave();
+  });
 
   // Soft-delete (design.md §4): first click arms it, second click while armed
   // actually deletes — a single accidental click can't trash anything.
@@ -266,6 +298,79 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     disarm();
     ctx.deleteNote(note.file.path);
   });
+
+  // ── Type-dependent UI (design.md §2, §4) ────────────────────────────────
+  // Everything here depends on note.fm.type and must be rebuilt — not just
+  // updated — when the type changes, since the shape of the fields changes.
+  // Each piece is tracked by a nullable element reference so it can be torn
+  // down and reinserted at a stable position without disturbing siblings.
+  function refreshTypeDependentUI() {
+    const typeInfo = NOTE_TYPES[note.fm.type] ?? NOTE_TYPES.draft;
+    card.style.setProperty("--card-type-color", typeInfo.color);
+    card.toggleClass("is-done", isTask(note) && note.fm.status === "done");
+    card.toggleClass("is-suspended", isTask(note) && note.fm.status === "suspended");
+    paintBadge(badge, note.fm.type);
+
+    if (filterLineEl) {
+      filterLineEl.remove();
+      filterLineEl = null;
+    }
+    if (typeInfo.filterAttr) {
+      filterLineEl = renderPillLine(pillsRow, typeInfo.filterAttr.label);
+      pillsRow.insertBefore(filterLineEl, pillsRow.firstChild);
+      renderFilterAttrPill(filterLineEl, note, ctx, card, dirty);
+    }
+
+    if (questionEl) {
+      questionEl.remove();
+      questionEl = null;
+    }
+    if (isThoughts(note) && note.fm.question) {
+      questionEl = titleRow.createEl("div", { cls: "logbook-question", text: note.fm.question });
+      titleRow.insertBefore(questionEl, titleEl);
+    }
+
+    if (occurrenceInfoEl) {
+      occurrenceInfoEl.remove();
+      occurrenceInfoEl = null;
+    }
+    if (isMeeting(note) && note.fm.subtype === "recurring") {
+      const n = note.fm.occurrences?.length ?? 0;
+      const latest = note.fm.occurrences?.[0];
+      occurrenceInfoEl = header.createEl("div", {
+        cls: "logbook-occurrence-info",
+        text: `${n} occurrence${n === 1 ? "" : "s"}${latest ? ` · latest ${latest}` : ""}`,
+      });
+      header.insertBefore(occurrenceInfoEl, previewWrap);
+    }
+
+    if (stackRowEl) {
+      stackRowEl.remove();
+      stackRowEl = null;
+    }
+    if (isKnowledge(note) && note.fm.techStack.length) {
+      stackRowEl = previewWrap.createDiv("logbook-stack-row");
+      stackRowEl.createEl("span", { cls: "logbook-stack-label", text: "STACK" });
+      for (const tech of note.fm.techStack) {
+        stackRowEl.createEl("span", { cls: "logbook-pill logbook-stack-chip", text: tech });
+      }
+      previewWrap.insertBefore(stackRowEl, previewWrap.firstChild);
+    }
+
+    typeFieldsEl.empty();
+    renderTypeFields(typeFieldsEl, note, ctx, dirty, () => (templateDirty = true), onFieldKeydown);
+  }
+
+  /** Stages a type conversion (design.md §15): replaces note.fm with the converted
+   *  shape and re-renders the type-dependent UI in place — committed wholesale by
+   *  changeType() when the card closes, like any other staged edit. */
+  function applyTypeChange(toType: NoteType) {
+    note.fm = convertType(note.fm, toType);
+    typeDirty = true;
+    refreshTypeDependentUI();
+  }
+
+  refreshTypeDependentUI();
 
   // ── Expand / collapse toggle ────────────────────────────────────────────
   // The card never renders the body inline — expanding opens the real note in
@@ -299,14 +404,15 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   card.addEventListener("keydown", onFieldKeydown);
 }
 
-function renderBadge(parent: HTMLElement, type: NoteType): HTMLElement {
+/** Repaints an existing badge node in place (e.g. after a type change) rather than
+ *  creating a new one, so the rest of the card's DOM doesn't need to track it. */
+function paintBadge(badge: HTMLElement, type: NoteType) {
   const typeInfo = NOTE_TYPES[type] ?? NOTE_TYPES.draft;
-  const badge = parent.createEl("span", { cls: "logbook-badge" });
+  badge.empty();
   badge.style.setProperty("--badge-color", typeInfo.color);
   const dot = badge.createEl("span", { cls: "logbook-badge-dot" });
   dot.style.background = typeInfo.color;
   badge.createSpan({ text: typeInfo.label.toUpperCase() });
-  return badge;
 }
 
 /**
