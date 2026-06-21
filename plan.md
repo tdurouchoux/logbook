@@ -42,3 +42,13 @@ Also fixed a design.md wording inaccuracy: the Change-type footer bullet said th
 Manual QA in a live vault is still outstanding for this phase: `/tag` autocomplete and filtering against notes with both frontmatter and inline tags, the new chip's removal (click and `Backspace`), and the `/type` two-step flow typed by hand end-to-end for both task/design (`status`) and meeting (`subtype`).
 
 Manual QA in a live vault is still outstanding (see the note at the top of this file): Save button under various focus states, change-type round-trips between all six types (check dropped/defaulted fields match design.md's table), pin toggle staging + section transition only on collapse, pinned section surviving filters and the history-window cutoff.
+
+## Status: done — Phase 26 (creation commands in Obsidian's command palette)
+
+`design.md` §7 now documents this. The seven creation commands (`/draft`, `/task`, `/meeting`, `/recurring`, `/thoughts`, `/knowledge`, `/design`) are mirrored as standalone, hotkey-bindable entries in Obsidian's own command palette, reachable without the Logbook view already being open. Implementation reuses the existing dock flow rather than building a second UI:
+
+- `dock.ts`'s already-private `pickCommand(key)` (prefills `/<key> `, focuses the input, re-runs `onInput()` — what clicking a command in its own dropdown already does) gained a public `runCommand(key)` wrapper.
+- `LogbookView.ts` gained `focusDockCommand(key)`, a one-line passthrough to `this.dock.runCommand(key)`, mirroring how `closeActiveCard()` already exposes a public entry point for `main.ts`'s global `Mod+Enter` command.
+- `main.ts` builds a `CREATION_COMMANDS` list off `ALL_COMMANDS` (the six `NOTE_TYPES`) plus a manual `recurring` entry, and registers one `addCommand` per type: each reveals/opens the Logbook view via `activateView()` (now returning the `LogbookView` instance instead of `void`) and calls `view.focusDockCommand(key)`.
+
+Filter commands (`/project`/`/team`/`/tag`/`/type`/`/clear`) and `/occurrence` were deliberately left out of the command palette — they only act on a feed that's already in view, so there's no payoff to firing them from elsewhere in the vault, unlike creation which is a quick-capture action.

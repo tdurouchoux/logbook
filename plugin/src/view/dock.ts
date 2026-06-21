@@ -240,6 +240,12 @@ export class Dock {
     this.onInput();
   }
 
+  /** Entry point for Obsidian command-palette commands (main.ts) — prefills and
+   *  focuses the bar exactly as picking the command from its own dropdown would. */
+  runCommand(key: string) {
+    this.pickCommand(key);
+  }
+
   private showPickList(query: string, pool: string[], onPick: (v: string) => void) {
     const matches = pool.filter((p) => fuzzyMatch(query, p));
     this.items = matches.map((m) => ({

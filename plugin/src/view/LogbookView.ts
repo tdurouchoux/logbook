@@ -172,6 +172,12 @@ export class LogbookView extends ItemView {
     if (this.activeCloseHandler) void this.activeCloseHandler();
   }
 
+  /** Backing the command-palette creation shortcuts (main.ts) — jumps straight into
+   *  the same prefilled-dock flow as picking the command from its own dropdown. */
+  focusDockCommand(key: string) {
+    this.dock.runCommand(key);
+  }
+
   private addFilterValue(key: "projects" | "teams" | "tags", value: string) {
     if (!this.filters[key].includes(value)) this.filters[key] = [...this.filters[key], value];
     this.afterFilterChange();
