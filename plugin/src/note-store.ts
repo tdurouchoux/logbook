@@ -22,11 +22,21 @@ export class NoteStore {
   private suppressedUntil = new Map<string, number>();
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private settleCb: (() => void) | null = null;
+  /** Destination paths of renames this store itself just performed (renameTitle) —
+   *  lets the view's own vault "rename" listener tell those apart from an
+   *  external rename (e.g. editing Obsidian's inline title) it needs to react to. */
+  private pendingSelfRenames = new Set<string>();
 
   constructor(private app: App, private settings: LogbookSettings) {}
 
   get folder(): string {
     return this.settings.folder;
+  }
+
+  /** True (and consumes the flag) iff `path` is the destination of a rename this
+   *  store itself just performed. */
+  consumeSelfRename(path: string): boolean {
+    return this.pendingSelfRenames.delete(path);
   }
 
   /** True while any write is mid-flight — used to skip a feed refresh that would tear down an open card. */
@@ -225,6 +235,7 @@ export class NoteStore {
     const filename = sanitizeFilename(newTitle);
     const newPath = normalizePath(`${file.parent?.path ?? this.folder}/${filename}.md`);
     if (newPath !== file.path && !this.app.vault.getAbstractFileByPath(newPath)) {
+      this.pendingSelfRenames.add(newPath);
       await this.app.fileManager.renameFile(file, newPath);
     }
     await this.updateFrontmatter(file, (fm) => {

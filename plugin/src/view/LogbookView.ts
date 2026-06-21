@@ -1,4 +1,4 @@
-import { ItemView, MarkdownView, TFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownView, TAbstractFile, TFile, WorkspaceLeaf } from "obsidian";
 import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
 import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_SUBTYPES, activityTimestamp } from "../types";
@@ -88,6 +88,7 @@ export class LogbookView extends ItemView {
     this.registerEvent(this.app.vault.on("create", () => this.maybeRefresh()));
     this.registerEvent(this.app.vault.on("modify", () => this.maybeRefresh()));
     this.registerEvent(this.app.vault.on("delete", () => this.maybeRefresh()));
+    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => void this.handleRename(file, oldPath)));
     this.registerEvent(this.app.metadataCache.on("changed", () => this.maybeRefresh()));
     this.store.onSettled(() => void this.refresh());
 
@@ -107,6 +108,27 @@ export class LogbookView extends ItemView {
     this.allNotes = await this.store.loadNotes();
     this.templateTitles = (await this.store.listTemplates()).map((t) => t.title);
     this.renderDisplay();
+  }
+
+  /** Editing Obsidian's own inline title (or renaming the file any other way —
+   *  Quick Switcher, file explorer) is literally a vault rename, since the title
+   *  doubles as the file name. Without this: every bit of state keyed by the old
+   *  path (expandedPath, cardCache, pendingNotePath) goes stale, isExpanded()
+   *  stops matching and the card looks frozen; and frontmatter `title` — the
+   *  feed's actual display source — never gets told about the new name at all.
+   *  Skipped when the rename came from our own renameTitle() (the card's title
+   *  field), which already wrote the literal typed title itself. */
+  private async handleRename(file: TAbstractFile, oldPath: string) {
+    if (!(file instanceof TFile) || !file.path.startsWith(this.store.folder + "/")) return;
+
+    if (this.expandedPath === oldPath) this.expandedPath = file.path;
+    if (this.pendingNotePath === oldPath) this.pendingNotePath = file.path;
+    this.cardCache.delete(oldPath);
+
+    if (this.store.consumeSelfRename(file.path)) return;
+    await this.store.updateFrontmatter(file, (fm) => {
+      fm.title = file.basename;
+    });
   }
 
   /** Esc on an expanded card (design.md §4): nothing was written to disk while
