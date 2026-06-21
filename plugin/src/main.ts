@@ -3,10 +3,11 @@ import { DEFAULT_SETTINGS, LogbookSettings, LogbookSettingTab } from "./settings
 import { LogbookView, VIEW_TYPE_LOGBOOK } from "./view/LogbookView";
 import { ALL_COMMANDS } from "./types";
 
-const CREATION_COMMANDS = [
-  ...ALL_COMMANDS.map((c) => ({ id: `new-${c.key}`, key: c.key, name: `New ${c.label.toLowerCase()}` })),
-  { id: "new-recurring-meeting", key: "recurring", name: "New recurring meeting" },
-];
+const CREATION_COMMANDS = ALL_COMMANDS.map((c) => ({
+  id: `new-${c.key}`,
+  key: c.key,
+  name: `New ${c.label.toLowerCase()}`,
+}));
 
 export default class LogbookPlugin extends Plugin {
   settings!: LogbookSettings;

@@ -32,7 +32,10 @@ function fieldsOf(note: LogNote): string[] {
       fields.push(fm.status);
       break;
     case "meeting":
-      fields.push(fm.theme, ...(fm.attendees ?? []));
+      fields.push(fm.agenda, ...(fm.attendees ?? []));
+      break;
+    case "recurring":
+      fields.push(...(fm.attendees ?? []));
       break;
     case "thoughts":
       fields.push(fm.question, fm.landed);

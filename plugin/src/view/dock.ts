@@ -209,13 +209,9 @@ export class Dock {
   private showCommandList(prefix: string) {
     const creation = ALL_COMMANDS.filter((c) => fuzzyMatch(prefix, c.key));
     const utility = UTILITY_COMMANDS.filter((c) => fuzzyMatch(prefix, c.key));
-    const recurring = fuzzyMatch(prefix, "recurring")
-      ? [{ key: "recurring", desc: "New recurring meeting" }]
-      : [];
 
     this.items = [
       ...creation.map((c) => this.commandItem(c.key, c.desc, () => this.pickCommand(c.key))),
-      ...recurring.map((c) => this.commandItem(c.key, c.desc, () => this.pickCommand(c.key))),
       ...utility.map((c) => this.commandItem(c.key, c.desc, () => this.pickCommand(c.key))),
     ];
     this.idx = 0;

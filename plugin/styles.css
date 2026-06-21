@@ -606,10 +606,10 @@
     font-style: italic;
 }
 
-/* ── Filterable-attribute pill (status / subtype) ───────────────────────── */
+/* ── Filterable-attribute pill (status / agenda) ───────────────────────── */
 /* Shared base for the type's filterable-property pill (design.md §2, §4).
    Always clickable: status filters when collapsed, cycles when expanded;
-   subtype always filters, never edits — see renderFilterAttrPill in card.ts. */
+   agenda always filters, never edits — see renderFilterAttrPill in card.ts. */
 .logbook-filter-attr-pill {
     font-size: 10.5px;
     font-weight: 600;
@@ -641,9 +641,9 @@
     background: color-mix(in srgb, var(--color-yellow, var(--text-muted)) 16%, transparent);
 }
 
-/* Meeting subtype: tie to the card's own type color rather than a semantic
-   status color, since standalone/recurring isn't a progression like status. */
-.logbook-subtype-pill.is-recurring {
+/* Meeting agenda: tie to the card's own type color rather than a semantic
+   status color, since the six agenda values aren't a progression like status. */
+.logbook-agenda-pill {
     color: var(--card-type-color, var(--text-muted));
     background: color-mix(in srgb, var(--card-type-color, var(--text-muted)) 16%, transparent);
 }

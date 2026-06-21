@@ -7,6 +7,7 @@ import {
   DESIGN_STATUSES,
   isTask,
   isMeeting,
+  isRecurring,
   isThoughts,
   isKnowledge,
   isDesign,
@@ -26,7 +27,7 @@ export interface CardContext {
   collapse(path: string): void;
   discardEdits(path: string): void;
   deleteNote(path: string): void;
-  pools: { projects(): string[]; teams(): string[]; templates(): string[] };
+  pools: { projects(): string[]; teams(): string[] };
   searchQuery: string;
   onFilterProject(p: string): void;
   onFilterTeam(t: string): void;
@@ -51,7 +52,6 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   // changed here. `commit()` flushes it all in one batch when the card closes.
   const dirty = new Set<string>();
   let titleDirty = false;
-  let templateDirty = false;
   let typeDirty = false;
 
   // ── Collapsed header ──────────────────────────────────────────────────
@@ -145,17 +145,12 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   // directly, instead of relying on the keystroke bubbling all the way up to a
   // single card-level listener (which a picker's own Enter handling, or some
   // future child listener, could swallow before it gets there).
-  /** Flushes every staged edit in as few writes as possible: a rename (title),
-   *  a template scaffold (meeting template), and one batched frontmatter write
-   *  for everything else (design.md §4). */
+  /** Flushes every staged edit in as few writes as possible: a rename (title)
+   *  and one batched frontmatter write for everything else (design.md §4). */
   const commit = async () => {
     if (titleDirty) {
       titleDirty = false;
       await ctx.store.renameTitle(note.file, note.fm.title);
-    }
-    if (templateDirty && isMeeting(note)) {
-      templateDirty = false;
-      await ctx.store.setMeetingTemplate(note.file, note.fm, note.fm.template ?? "");
     }
     if (typeDirty) {
       // Replace-not-merge (design.md §15): a type change drops every old-type
@@ -334,9 +329,9 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
       occurrenceInfoEl.remove();
       occurrenceInfoEl = null;
     }
-    if (isMeeting(note) && note.fm.subtype === "recurring") {
-      const n = note.fm.occurrences?.length ?? 0;
-      const latest = note.fm.occurrences?.[0];
+    if (isRecurring(note)) {
+      const n = note.fm.occurrences.length;
+      const latest = note.fm.occurrences[0];
       occurrenceInfoEl = header.createEl("div", {
         cls: "logbook-occurrence-info",
         text: `${n} occurrence${n === 1 ? "" : "s"}${latest ? ` · latest ${latest}` : ""}`,
@@ -358,7 +353,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     }
 
     typeFieldsEl.empty();
-    renderTypeFields(typeFieldsEl, note, ctx, dirty, () => (templateDirty = true), onFieldKeydown);
+    renderTypeFields(typeFieldsEl, note, ctx, dirty, onFieldKeydown);
   }
 
   /** Stages a type conversion (design.md §15): replaces note.fm with the converted
@@ -430,7 +425,7 @@ function renderPillLine(parent: HTMLElement, label: string): HTMLElement {
 /**
  * The type's filterable-property pill (design.md §2, §4): task/design's `status`
  * filters when collapsed but cycles (and stages, design.md §4) when expanded;
- * meeting's `subtype` always filters, in either state, and is never editable.
+ * meeting's `agenda` always filters, in either state, and is never editable.
  * Reused as a single DOM node relocated between the collapsed top row and the
  * expanded field block, so its click behavior is read from `card`'s current
  * `is-expanded` class at click time rather than baked in at render time.
@@ -447,9 +442,9 @@ function renderFilterAttrPill(
   const { key } = typeInfo.filterAttr;
 
   if (isMeeting(note)) {
-    const value = note.fm.subtype;
+    const value = note.fm.agenda;
     const pill = parent.createEl("span", {
-      cls: `logbook-pill logbook-filter-attr-pill logbook-subtype-pill is-${value}`,
+      cls: `logbook-pill logbook-filter-attr-pill logbook-agenda-pill is-${value}`,
       text: value,
     });
     pill.addEventListener("click", (e) => {
@@ -487,24 +482,9 @@ function renderTypeFields(
   note: LogNote,
   ctx: CardContext,
   dirty: Set<string>,
-  markTemplateDirty: () => void,
   onFieldKeydown: (e: KeyboardEvent) => void
 ) {
-  if (isMeeting(note)) {
-    const themeRow = container.createDiv("logbook-field-row");
-    themeRow.createEl("label", { text: "Theme" });
-    const themeInput = themeRow.createEl("input", {
-      cls: "logbook-field-input",
-      attr: { type: "text", placeholder: "theme…" },
-    });
-    themeInput.value = note.fm.theme ?? "";
-    themeInput.addEventListener("input", () => {
-      note.fm.theme = themeInput.value.trim() || undefined;
-      dirty.add("theme");
-    });
-    themeInput.addEventListener("click", (e) => e.stopPropagation());
-    themeInput.addEventListener("keydown", onFieldKeydown);
-
+  if (isMeeting(note) || isRecurring(note)) {
     const attendeesRow = container.createDiv("logbook-field-row");
     attendeesRow.createEl("label", { text: "Attendees" });
     const attendeesWrap = attendeesRow.createDiv();
@@ -518,23 +498,6 @@ function renderTypeFields(
         dirty.add("attendees");
       },
     });
-
-    const templateRow = container.createDiv("logbook-field-row");
-    templateRow.createEl("label", { text: "Template" });
-    const templateListId = `logbook-templates-${note.file.path.replace(/[^a-zA-Z0-9]/g, "-")}`;
-    const templateInput = templateRow.createEl("input", {
-      cls: "logbook-field-input",
-      attr: { type: "text", placeholder: "none", list: templateListId },
-    });
-    const datalist = templateRow.createEl("datalist", { attr: { id: templateListId } });
-    for (const t of ctx.pools.templates()) datalist.createEl("option", { attr: { value: t } });
-    templateInput.value = note.fm.template ?? "";
-    templateInput.addEventListener("input", () => {
-      note.fm.template = templateInput.value.trim() || undefined;
-      markTemplateDirty();
-    });
-    templateInput.addEventListener("click", (e) => e.stopPropagation());
-    templateInput.addEventListener("keydown", onFieldKeydown);
   }
 
   if (isThoughts(note)) {
