@@ -237,6 +237,18 @@ export class NoteStore {
     await this.app.vault.trash(file, true);
   }
 
+  /** Replaces frontmatter wholesale for a type change (design.md §15) — unlike updateFrontmatter's
+   *  key-by-key mutator, this drops every key not present in newFm's shape. */
+  async changeType(file: TFile, newFm: NoteFrontmatter): Promise<void> {
+    await this.updateFrontmatter(file, (raw) => {
+      const newKeys = new Set(Object.keys(newFm));
+      for (const key of Object.keys(raw)) {
+        if (!newKeys.has(key)) delete raw[key];
+      }
+      Object.assign(raw, newFm);
+    });
+  }
+
   /** Trash (never hard-delete) draft notes older than 7 days, per design.md §5.1. */
   async pruneOldDrafts(): Promise<void> {
     const notes = await this.loadNotes();
@@ -259,6 +271,7 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
     projects: Array.isArray(raw.projects) ? raw.projects.map(String) : [],
     teams: Array.isArray(raw.teams) ? raw.teams.map(String) : [],
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(file.stat.ctime).toISOString(),
+    pinned: typeof raw.pinned === "boolean" ? raw.pinned : undefined,
   };
 
   switch (type) {

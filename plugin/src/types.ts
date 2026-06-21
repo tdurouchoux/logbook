@@ -64,6 +64,8 @@ export interface CommonFrontmatter {
   projects: string[];
   teams: string[];
   createdAt: string;
+  /** Omitted (not `false`) when not pinned — see design.md §2, §3, §4. */
+  pinned?: boolean;
 }
 
 export interface TaskFrontmatter extends CommonFrontmatter {
@@ -129,6 +131,35 @@ export function isKnowledge(n: LogNote): n is LogNote & { fm: KnowledgeFrontmatt
 }
 export function isDesign(n: LogNote): n is LogNote & { fm: DesignFrontmatter } {
   return n.fm.type === "design";
+}
+
+/** Converts frontmatter to another note type per design.md's conversion rules:
+ *  keep common fields, drop everything type-specific, fill in the new type's defaults
+ *  (mirroring note-store.ts's createNote() defaults). */
+export function convertType(fm: NoteFrontmatter, toType: NoteType): NoteFrontmatter {
+  const base: CommonFrontmatter = {
+    id: fm.id,
+    type: toType,
+    title: fm.title,
+    projects: fm.projects,
+    teams: fm.teams,
+    createdAt: fm.createdAt,
+    pinned: fm.pinned,
+  };
+  switch (toType) {
+    case "task":
+      return { ...base, type: "task", status: "todo" };
+    case "design":
+      return { ...base, type: "design", status: "exploring" };
+    case "meeting":
+      return { ...base, type: "meeting", subtype: "standalone", attendees: [] };
+    case "knowledge":
+      return { ...base, type: "knowledge", techStack: [] };
+    case "thoughts":
+      return { ...base, type: "thoughts" };
+    default:
+      return { ...base, type: "draft" };
+  }
 }
 
 /** "YYYY-MM-DD" parsed as a local-midnight Date — the bare `Date` string constructor

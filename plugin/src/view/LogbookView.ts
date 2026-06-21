@@ -23,6 +23,7 @@ export class LogbookView extends ItemView {
 
   private expandedPath: string | null = null;
   private frozenTimestamp: number | null = null;
+  private frozenPinned: boolean | null = null;
   private activeCloseHandler: (() => void | Promise<void>) | null = null;
   private cardCache: CardCache = new Map();
   private pendingDivider: string | undefined;
@@ -117,6 +118,7 @@ export class LogbookView extends ItemView {
     if (this.expandedPath === path) {
       this.expandedPath = null;
       this.frozenTimestamp = null;
+      this.frozenPinned = null;
       this.activeCloseHandler = null;
     }
     if (this.pendingNotePath === path) this.pendingNotePath = undefined;
@@ -133,6 +135,7 @@ export class LogbookView extends ItemView {
     if (this.expandedPath === path) {
       this.expandedPath = null;
       this.frozenTimestamp = null;
+      this.frozenPinned = null;
       this.activeCloseHandler = null;
     }
     if (this.pendingNotePath === path) this.pendingNotePath = undefined;
@@ -185,16 +188,33 @@ export class LogbookView extends ItemView {
       .map((n) => ({ title: n.fm.title, path: n.file.path }));
   }
 
+  /** Whether `n` belongs in the Pinned section (design.md §3) — frozen at expand time
+   *  (mirroring sortKey's frozenTimestamp) so a mid-edit pin toggle doesn't move a card
+   *  between the regular feed and the Pinned section until it collapses. */
+  private isPinnedFor(n: LogNote): boolean {
+    if (this.expandedPath === n.file.path && this.frozenPinned !== null) return this.frozenPinned;
+    return !!n.fm.pinned;
+  }
+
   private windowedNotes(): LogNote[] {
-    if (hasActiveFilters(this.filters)) return applyFilters(this.allNotes, this.filters);
+    if (hasActiveFilters(this.filters)) {
+      return applyFilters(this.allNotes, this.filters).filter((n) => !this.isPinnedFor(n));
+    }
     const cutoff = Date.now() - this.monthsBack * 30 * 24 * 60 * 60 * 1000;
-    return this.allNotes.filter((n) => activityTimestamp(n) >= cutoff);
+    return this.allNotes.filter((n) => !this.isPinnedFor(n) && activityTimestamp(n) >= cutoff);
+  }
+
+  /** Pinned section (design.md §3): exempt from the history-window cutoff, but still
+   *  subject to active filters/search like the rest of the feed. */
+  private pinnedNotes(): LogNote[] {
+    const base = hasActiveFilters(this.filters) ? applyFilters(this.allNotes, this.filters) : this.allNotes;
+    return base.filter((n) => this.isPinnedFor(n));
   }
 
   private hasMoreHistory(): boolean {
     if (hasActiveFilters(this.filters)) return false;
     const cutoff = Date.now() - this.monthsBack * 30 * 24 * 60 * 60 * 1000;
-    return this.allNotes.some((n) => activityTimestamp(n) < cutoff);
+    return this.allNotes.some((n) => !this.isPinnedFor(n) && activityTimestamp(n) < cutoff);
   }
 
   /** Pins the expanded card's sort position so a frontmatter edit (e.g. a status pill click)
@@ -206,6 +226,7 @@ export class LogbookView extends ItemView {
 
   private renderDisplay() {
     const notes = this.windowedNotes().sort((a, b) => this.sortKey(a) - this.sortKey(b));
+    const pinned = this.pinnedNotes().sort((a, b) => this.sortKey(a) - this.sortKey(b));
 
     const ctx: CardContext = {
       app: this.app,
@@ -217,6 +238,7 @@ export class LogbookView extends ItemView {
         this.expandedPath = path;
         const note = this.allNotes.find((n) => n.file.path === path);
         this.frozenTimestamp = note ? activityTimestamp(note) : null;
+        this.frozenPinned = note ? !!note.fm.pinned : null;
         // Run the previously-expanded card's own close handler (commit + collapse-UI)
         // instead of stripping .is-expanded directly, so its staged edits get saved
         // and its pillsRow node isn't left stranded in the expanded DOM position.
@@ -233,6 +255,7 @@ export class LogbookView extends ItemView {
         if (this.expandedPath === path) {
           this.expandedPath = null;
           this.frozenTimestamp = null;
+          this.frozenPinned = null;
           this.activeCloseHandler = null;
         }
         if (this.pendingNotePath === path) this.pendingNotePath = undefined;
@@ -265,6 +288,7 @@ export class LogbookView extends ItemView {
         pendingDivider: this.pendingDivider,
         pendingNotePath: this.pendingNotePath,
         activityOf: (n) => this.sortKey(n),
+        pinnedNotes: pinned,
       },
       ctx,
       this.cardCache

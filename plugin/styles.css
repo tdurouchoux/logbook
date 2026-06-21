@@ -193,11 +193,32 @@
     cursor: pointer;
 }
 
-/* Pinned to the top-right corner of card-top in both states (design.md §4):
-   pillsRow's flex:1 provides this spacer only while collapsed (it relocates
-   out of card-top on expand), so the chevron pushes itself right instead. */
-.logbook-chevron {
+/* Pin glyph (design.md §4): leads the top-right corner cluster (pin, chevron,
+   age), pinned to the card's top-right corner in both states. It — not the
+   chevron — carries the auto-margin spacer needed once pillsRow relocates out
+   of card-top on expand, since it's now the first element of that cluster. */
+.logbook-pin-indicator {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    color: var(--text-faint);
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.logbook-pin-indicator svg {
+    width: 13px;
+    height: 13px;
+}
+.logbook-pin-indicator.is-pinned {
+    color: var(--interactive-accent);
+}
+/* Indicator-only while collapsed: hidden entirely unless the note is pinned.
+   Always visible once expanded, so the user can toggle it on. */
+.logbook-card:not(.is-expanded) .logbook-pin-indicator:not(.is-pinned) {
+    display: none;
+}
+
+.logbook-chevron {
     display: flex;
     align-items: center;
     color: var(--text-faint);
@@ -444,6 +465,7 @@
 .logbook-expand-footer {
     display: flex;
     align-items: center;
+    gap: 8px;
     margin-top: 12px;
     padding-top: 10px;
 }
@@ -761,6 +783,35 @@
     margin-right: auto;
 }
 
+/* Change type / Save (design.md §4, §12) — footer order is hint, Change type,
+   Save, Delete; Delete stays the literal last/rightmost control. */
+.logbook-type-btn,
+.logbook-save-btn {
+    flex-shrink: 0;
+    font-size: 11.5px;
+    padding: 4px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    cursor: pointer;
+}
+.logbook-type-btn {
+    background: transparent;
+    color: var(--text-muted);
+}
+.logbook-type-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+.logbook-save-btn {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: transparent;
+    font-weight: 600;
+}
+.logbook-save-btn:hover {
+    background: var(--interactive-accent-hover);
+}
+
 /* Trash button, pinned to the bottom-right of the footer by .logbook-kbd-hint's
    margin-right: auto above. Two-click confirm (design.md §4): .is-armed is the
    "click again to delete" state. */
@@ -854,6 +905,12 @@
     background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
 }
 
+/* Pinned section divider (design.md §3) — always the last divider in the feed. */
+.logbook-divider-pinned span {
+    color: var(--text-normal);
+    background: var(--background-modifier-border-hover);
+}
+
 /* ── Collapse mode ───────────────────────────────────────────────────────── */
 
 .logbook-view.is-collapse-mode .logbook-card-preview-wrap,
@@ -861,7 +918,8 @@
 .logbook-view.is-collapse-mode .logbook-time,
 .logbook-view.is-collapse-mode .logbook-occurrence-info,
 .logbook-view.is-collapse-mode .logbook-question,
-.logbook-view.is-collapse-mode .logbook-chevron {
+.logbook-view.is-collapse-mode .logbook-chevron,
+.logbook-view.is-collapse-mode .logbook-pin-indicator {
     display: none;
 }
 .logbook-view.is-collapse-mode .logbook-card {
