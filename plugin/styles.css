@@ -81,7 +81,12 @@
 
 /* Expanded card stays a flat row like the rest of the list — only the
    internal separator lines (header/properties, properties/footer) are
-   dropped so they don't read as extra card boundaries. */
+   dropped so they don't read as extra card boundaries. A thin accent bar
+   on the left (Bear's selected-row treatment) marks which one is open. */
+.logbook-card.is-expanded {
+    border-left: 3px solid var(--interactive-accent);
+    padding-left: 13px;
+}
 
 @keyframes lb-fadein {
     from {
