@@ -121,8 +121,10 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const pinIndicator = top.createEl("span", { cls: "logbook-pin-indicator", attr: { "aria-label": "Pinned" } });
   setIcon(pinIndicator, "pin");
   pinIndicator.addEventListener("click", (e) => {
-    e.stopPropagation();
+    // While collapsed it's display-only — don't intercept the click, so it
+    // falls through to the card's own handler and expands like normal.
     if (!card.hasClass("is-expanded")) return;
+    e.stopPropagation();
     const next = !note.fm.pinned;
     note.fm.pinned = next || undefined;
     dirty.add("pinned");

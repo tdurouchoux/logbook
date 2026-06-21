@@ -203,7 +203,6 @@
     align-items: center;
     color: var(--text-faint);
     flex-shrink: 0;
-    cursor: pointer;
 }
 .logbook-pin-indicator svg {
     width: 13px;
@@ -212,10 +211,15 @@
 .logbook-pin-indicator.is-pinned {
     color: var(--interactive-accent);
 }
-/* Indicator-only while collapsed: hidden entirely unless the note is pinned.
-   Always visible once expanded, so the user can toggle it on. */
+/* Indicator-only while collapsed: hidden entirely unless the note is pinned,
+   and never a clickable affordance — the click handler ignores collapsed
+   clicks too, so the cursor must not promise otherwise. Toggleable only
+   once expanded. */
 .logbook-card:not(.is-expanded) .logbook-pin-indicator:not(.is-pinned) {
     display: none;
+}
+.logbook-card.is-expanded .logbook-pin-indicator {
+    cursor: pointer;
 }
 
 .logbook-chevron {
