@@ -100,8 +100,6 @@ export interface RecurringFrontmatter extends CommonFrontmatter {
 
 export interface ThoughtsFrontmatter extends CommonFrontmatter {
   type: "thoughts";
-  question?: string;
-  landed?: string;
 }
 
 export interface KnowledgeFrontmatter extends CommonFrontmatter {

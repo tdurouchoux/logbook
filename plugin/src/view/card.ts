@@ -8,7 +8,6 @@ import {
   isTask,
   isMeeting,
   isRecurring,
-  isThoughts,
   isKnowledge,
   isDesign,
   convertType,
@@ -192,7 +191,6 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   };
 
   const titleRow = header.createDiv("logbook-title-row");
-  let questionEl: HTMLElement | null = null;
   const titleEl = titleRow.createEl("div", { cls: "logbook-title" });
   if (ctx.searchQuery) {
     renderMatches(titleEl, note.fm.title, fuzzyMatchRanges(note.fm.title, ctx.searchQuery));
@@ -323,15 +321,6 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
       filterLineEl = renderPillLine(pillsRow, typeInfo.filterAttr.label);
       pillsRow.insertBefore(filterLineEl, pillsRow.firstChild);
       renderFilterAttrPill(filterLineEl, note, ctx, card, dirty);
-    }
-
-    if (questionEl) {
-      questionEl.remove();
-      questionEl = null;
-    }
-    if (isThoughts(note) && note.fm.question) {
-      questionEl = titleRow.createEl("div", { cls: "logbook-question", text: note.fm.question });
-      titleRow.insertBefore(questionEl, titleEl);
     }
 
     if (occurrenceInfoEl) {
@@ -494,30 +483,6 @@ function renderTypeFields(
         dirty.add("attendees");
       },
     });
-  }
-
-  if (isThoughts(note)) {
-    const qRow = container.createDiv("logbook-field-row");
-    qRow.createEl("label", { text: "Question" });
-    const qInput = qRow.createEl("input", { cls: "logbook-field-input", attr: { type: "text" } });
-    qInput.value = note.fm.question ?? "";
-    qInput.addEventListener("input", () => {
-      note.fm.question = qInput.value.trim() || undefined;
-      dirty.add("question");
-    });
-    qInput.addEventListener("click", (e) => e.stopPropagation());
-    qInput.addEventListener("keydown", onFieldKeydown);
-
-    const lRow = container.createDiv("logbook-field-row");
-    lRow.createEl("label", { text: "Where I landed" });
-    const lInput = lRow.createEl("input", { cls: "logbook-field-input", attr: { type: "text" } });
-    lInput.value = note.fm.landed ?? "";
-    lInput.addEventListener("input", () => {
-      note.fm.landed = lInput.value.trim() || undefined;
-      dirty.add("landed");
-    });
-    lInput.addEventListener("click", (e) => e.stopPropagation());
-    lInput.addEventListener("keydown", onFieldKeydown);
   }
 
   if (isKnowledge(note)) {

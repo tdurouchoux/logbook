@@ -336,7 +336,7 @@ export class LogbookView extends ItemView {
     this.renderDisplay();
   }
 
-  private async createAndShow(type: NoteType, titleOrQuestion: string) {
+  private async createAndShow(type: NoteType, title: string) {
     // Mirrors what ctx.expand() does when switching between two existing cards
     // (commit + collapse the previously-open one) — createAndShow sets
     // expandedPath directly rather than going through ctx.expand(), so without
@@ -344,8 +344,8 @@ export class LogbookView extends ItemView {
     if (this.activeCloseHandler) await this.activeCloseHandler();
 
     const file = type === "recurring"
-      ? await this.store.createRecurringMeeting(titleOrQuestion)
-      : await this.store.createNote(type, titleOrQuestion);
+      ? await this.store.createRecurringMeeting(title)
+      : await this.store.createNote(type, title);
 
     this.expandedPath = file.path;
     this.pendingDivider = `Writing a ${NOTE_TYPES[type].label.toLowerCase()}`;

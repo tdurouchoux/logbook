@@ -109,14 +109,13 @@ export class NoteStore {
 
   async createNote(
     type: NoteType,
-    titleOrQuestion: string
+    title: string
   ): Promise<TFile> {
     const folder = this.folder;
     if (!this.app.vault.getAbstractFileByPath(folder)) {
       await this.app.vault.createFolder(folder);
     }
 
-    const title = type === "thoughts" ? titleOrQuestion || "Untitled thought" : titleOrQuestion;
     const filename = sanitizeFilename(title);
     let path = normalizePath(`${folder}/${filename}.md`);
     let i = 1;
@@ -145,8 +144,6 @@ export class NoteStore {
       lines.push("attendees: []");
     } else if (type === "knowledge") {
       lines.push("techStack: []");
-    } else if (type === "thoughts") {
-      lines.push(`question: "${escapeYamlString(titleOrQuestion)}"`);
     }
 
     lines.push("---", "");
@@ -254,12 +251,7 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
         occurrences: Array.isArray(raw.occurrences) ? raw.occurrences.map(String) : [],
       };
     case "thoughts":
-      return {
-        ...base,
-        type: "thoughts",
-        question: typeof raw.question === "string" ? raw.question : undefined,
-        landed: typeof raw.landed === "string" ? raw.landed : undefined,
-      };
+      return { ...base, type: "thoughts" };
     case "knowledge":
       return {
         ...base,
