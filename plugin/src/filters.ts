@@ -38,9 +38,6 @@ function fieldsOf(note: LogNote): string[] {
     case "recurring":
       fields.push(...(fm.attendees ?? []));
       break;
-    case "thoughts":
-      fields.push(fm.question, fm.landed);
-      break;
     case "knowledge":
       fields.push(...(fm.techStack ?? []));
       break;

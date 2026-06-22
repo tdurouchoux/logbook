@@ -723,13 +723,6 @@
 
 /* ── Title row / inline editable title ──────────────────────────────────── */
 
-.logbook-question {
-    font-size: 11.5px;
-    font-style: italic;
-    color: var(--text-muted);
-    margin-bottom: 2px;
-}
-
 .logbook-title-edit-wrap {
     display: none;
 }
@@ -1017,7 +1010,6 @@
 .logbook-view.is-collapse-mode .logbook-pills-row,
 .logbook-view.is-collapse-mode .logbook-time,
 .logbook-view.is-collapse-mode .logbook-occurrence-info,
-.logbook-view.is-collapse-mode .logbook-question,
 .logbook-view.is-collapse-mode .logbook-chevron,
 .logbook-view.is-collapse-mode .logbook-pin-indicator {
     display: none;

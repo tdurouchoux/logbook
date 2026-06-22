@@ -9,7 +9,7 @@ export interface RecurringMeetingRef {
 
 export interface DockCallbacks {
   onSearch(query: string): void;
-  onCreate(type: NoteType, titleOrQuestion: string): void;
+  onCreate(type: NoteType, title: string): void;
   onCreateRecurring(title: string): void;
   onFilterProject(name: string): void;
   onFilterTeam(name: string): void;
@@ -199,7 +199,7 @@ export class Dock {
       return;
     }
 
-    // Creation command — free text title/question, no dropdown.
+    // Creation command — free text title, no dropdown.
     this.phase = "free-arg";
     this.closeDropdown();
     const typeInfo = NOTE_TYPES[cmdKey as NoteType];
