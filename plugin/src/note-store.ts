@@ -96,11 +96,7 @@ export class NoteStore {
       const fm = normalizeFrontmatter(raw, file);
       const tags = (getAllTags(cache) ?? []).map((t) => t.slice(1));
       const content = await this.app.vault.cachedRead(file);
-      let body = content;
-      if (content.startsWith("---")) {
-        const end = content.indexOf("\n---\n", 3);
-        body = end >= 0 ? content.slice(end + 5).trim() : "";
-      }
+      const body = stripFrontmatter(content);
 
       notes.push({ file, body, fm, tags });
     }
@@ -147,8 +143,21 @@ export class NoteStore {
     }
 
     lines.push("---", "");
-    await this.app.vault.create(path, lines.join("\n"));
+    const templateBody = await this.getTemplateBody(type);
+    await this.app.vault.create(path, lines.join("\n") + templateBody);
     return this.app.vault.getAbstractFileByPath(path) as TFile;
+  }
+
+  /** design.md §7 — resolves the configured template for `type`, if any. Returns ""
+   *  when no path is set or it doesn't resolve to an existing file, so a missing
+   *  template is silently equivalent to having none. */
+  private async getTemplateBody(type: NoteType): Promise<string> {
+    const path = this.settings.templates[type]?.trim();
+    if (!path) return "";
+    const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
+    if (!(file instanceof TFile)) return "";
+    const content = await this.app.vault.cachedRead(file);
+    return stripFrontmatter(content);
   }
 
   async createRecurringMeeting(title: string): Promise<TFile> {
@@ -267,6 +276,13 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
 
 function escapeYamlString(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+/** Strips a leading YAML frontmatter block (if any), returning just the body. */
+function stripFrontmatter(content: string): string {
+  if (!content.startsWith("---")) return content;
+  const end = content.indexOf("\n---\n", 3);
+  return end >= 0 ? content.slice(end + 5).trim() : "";
 }
 
 function insertOccurrenceHeading(content: string, isoDate: string): string {
