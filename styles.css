@@ -134,8 +134,9 @@
 
 /* ── Pills — shared base for every chip/pill in the UI ──────────────────── */
 /* One consistent shape + interaction language (rounded, animated, tactile)
-   so project/team/tag/attendee/stack/status/filter pills read as one family
-   even though each kind carries its own color meaning. */
+   so badge/project/team/tag/attendee/stack/status/filter pills read as one
+   family — same height in particular — even though each kind carries its
+   own color meaning. */
 .logbook-pill {
     display: inline-flex;
     align-items: center;
@@ -154,14 +155,11 @@
 /* ── Type badge ──────────────────────────────────────────────────────────── */
 
 .logbook-badge {
-    display: inline-flex;
-    align-items: center;
     gap: 5px;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.055em;
     padding: 2px 8px 2px 5px;
-    border-radius: 999px;
     color: var(--badge-color, #807966);
     background: color-mix(
         in srgb,
@@ -171,9 +169,6 @@
     white-space: nowrap;
     flex-shrink: 0;
     cursor: pointer;
-    transition:
-        background-color 0.12s ease,
-        transform 0.08s ease;
 }
 .logbook-badge:hover {
     background: color-mix(
@@ -181,9 +176,6 @@
         var(--badge-color, #807966) 22%,
         transparent
     );
-}
-.logbook-badge:active {
-    transform: scale(0.95);
 }
 
 .logbook-badge-dot {

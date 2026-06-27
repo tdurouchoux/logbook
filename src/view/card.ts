@@ -58,7 +58,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const header = card.createDiv("logbook-card-header");
   const top = header.createDiv("logbook-card-top");
 
-  const badge = top.createEl("span", { cls: "logbook-badge" });
+  const badge = top.createEl("span", { cls: "logbook-pill logbook-badge" });
   badge.addEventListener("click", (e) => {
     e.stopPropagation();
     ctx.onFilterType(note.fm.type);
