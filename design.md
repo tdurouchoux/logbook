@@ -210,7 +210,7 @@ Conversion rules:
 
 Quick unstructured capture — the catchall when no other type fits. No extra fields. Badge color: warm gray.
 
-**Auto-delete:** on plugin load, any `type: draft` note whose `createdAt` is more than 7 days ago is sent to `app.vault.trash()` (respecting the vault's configured trash location — never a hard delete).
+**Auto-delete:** on plugin load, any `type: draft` note whose mtime (last-modified) is older than the configured draft TTL (default 14 days, settings tab, see §15) is sent to `app.vault.trash()` (respecting the vault's configured trash location — never a hard delete). Setting the TTL to blank disables draft auto-delete entirely.
 
 ### 5.2 Task
 
@@ -221,6 +221,7 @@ An action with a state.
 - Created the same way as any other note type: inline at the bottom of the feed, via the `/task` command (status `todo`).
 - Status pill: on the collapsed card, clicking it applies a status filter (see §4, §8); in the expanded card, clicking it instead cycles `todo → done → suspended → todo` and saves immediately.
 - `done` tasks: title struck through, card dimmed. `suspended` tasks: dimmed further.
+- **Auto-delete:** the same mtime-based mechanism as draft auto-delete (§5.1) also applies to `done` tasks, on the same plugin-load pass, with its own configurable TTL (default 14 days, settings tab, see §15). A task only starts that clock once its `status` is `done` and its mtime stops advancing; cycling it back to `todo`/`suspended` bumps mtime and resets it. Setting the TTL to blank disables it entirely.
 
 ### 5.3 Meeting
 
@@ -312,6 +313,7 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 | `/team [name]` | Filter by team; autocompletes from existing teams |
 | `/tag [name]` | Filter by Obsidian tag (frontmatter `tags` + inline `#tags`, read from the metadata cache); autocompletes from every tag in use across the logbook folder |
 | `/type [type]` | Filter by note type; autocompletes the seven types. Selecting a type with a sub-attribute (task/design → status, meeting → agenda) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
+| `/exclude [type]` | Hide a note type (and optionally a sub-attribute value), instead of restricting to it. Identical two-step flow to `/type` — same type list, same sub-attribute step — but the resulting filter is negated: matching notes are removed from the feed rather than being the only ones kept. `/exclude task done` hides only done tasks (other tasks, and every other type, stay visible); `/exclude task` with no sub-attribute hides all tasks. Independent of, and combinable with, `/type` and every other filter axis — all active filters still AND together (§8) |
 
 **Other:**
 
@@ -339,15 +341,17 @@ A filter narrows what the feed shows; all active filters AND together. Filter ax
 - Tags (multi-select) — read-only filter over Obsidian's own tags, via `/tag` (see §9)
 - Type (single)
 - Type-specific attribute (single, available once a type filter is set)
+- Excluded type (single, via `/exclude`, see §7) — independent of the Type axis above, can be set at the same time
+- Excluded type's attribute (single, available once an excluded type with a sub-attribute is set)
 
 ### Filter chips
 
-Active filters appear as chips inside the command bar, to the left of the input: a briefcase-icon chip for projects, a people-icon chip for teams, a plain chip for tags, and a colored-dot pill for type. Each chip is removable via its own × or by clicking it.
+Active filters appear as chips inside the command bar, to the left of the input: a briefcase-icon chip for projects, a people-icon chip for teams, a plain chip for tags, a colored-dot pill for type, and an "exclude type"-labeled chip for an active `/exclude` filter. Each chip is removable via its own × or by clicking it.
 
 ### Removing filters
 
 - Click the × on a chip.
-- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: project → team → tag → type → type attribute.
+- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: project → team → tag → exclude-type attribute → exclude type → type → type attribute.
 - Run `/clear`.
 
 ### Clicking things
@@ -462,8 +466,8 @@ A consistent rule: dots and icons prefix every chip so filter context is readabl
 - **Refresh suppression** — after a `processFrontMatter` call, vault events fire immediately. The feed suppresses re-renders for 600 ms afterward so an open expanded card isn't torn down mid-edit.
 - **Incremental feed rendering** — a refresh never tears down and rebuilds the whole card list. Each note's card is keyed by file path and cached; a render reuses a note's existing card DOM unchanged unless that note's own frontmatter/body/mtime actually differs from what's cached, and a card that's currently expanded is never rebuilt out from under the user regardless of what changed elsewhere — only dividers and the top-level ordering are recomputed each time. This means a write to one note (and the settle-triggered refresh ~600ms later) only ever touches that note's own card, not every card in the feed. The one exception: the relative-time pill's text is refreshed on every render pass even for a reused/cached card, since it's a function of wall-clock time rather than the note's own data — otherwise it would stay frozen at whatever it said ("now", say) the last time that card was actually rebuilt, even hours later.
 - **No custom sync** — notes are plain `.md` files in the vault; whatever sync the user already has (iCloud, Obsidian Sync, git) handles them.
-- **Trash, not delete** — destructive operations (draft auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting.
-- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), plus one optional template-file path per note type (default `templates/<type>.md`), used to seed a new note's body on creation — see §7. Also exposes the MCP server's enabled toggle and port — see §16.
+- **Trash, not delete** — destructive operations (draft/done-task auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting. Also display the MCP options (enable button and port).
+- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), one optional template-file path per note type (default `templates/<type>.md`) used to seed a new note's body on creation (see §7), and the draft/done-task auto-delete TTLs in days (default 14 each, see §5.1/§5.2) — each measured from the note's mtime, and each independently disabled by leaving its field blank.
 - **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
 - **Icons** — project (briefcase) and team (people) pill icons use Obsidian's built-in `setIcon()` API against the Lucide icon set, the same mechanism the collapse-mode title-bar action already uses (see §10) — no custom inline SVG.
 - **Type-change commits replace, not merge** — every other staged edit flushes via a `dirty` key set (only the changed keys get written into the existing frontmatter object). A staged type change can't use that path: it has to delete every key belonging to the old type's shape that isn't part of the new type's shape (e.g. a task's `status` shouldn't survive becoming a meeting) and write the new type's full field set, in the same single batched `processFrontMatter` call — a full replace of the type-specific slice of frontmatter, not an incremental patch.

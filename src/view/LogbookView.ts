@@ -67,6 +67,11 @@ export class LogbookView extends ItemView {
         this.filters.typeAttr = attr ?? null;
         this.afterFilterChange();
       },
+      onExcludeType: (type, attr) => {
+        this.filters.excludeType = type;
+        this.filters.excludeTypeAttr = attr ?? null;
+        this.afterFilterChange();
+      },
       onClearFilters: () => {
         this.filters = emptyFilters();
         this.afterFilterChange();
@@ -92,7 +97,7 @@ export class LogbookView extends ItemView {
     this.registerEvent(this.app.metadataCache.on("changed", () => this.maybeRefresh()));
     this.store.onSettled(() => void this.refresh());
 
-    await this.store.pruneOldDrafts();
+    await this.store.pruneExpiredNotes();
     await this.refresh();
     setTimeout(() => {
       this.feedEl.scrollTop = this.feedEl.scrollHeight;
@@ -181,7 +186,10 @@ export class LogbookView extends ItemView {
     this.afterFilterChange();
   }
 
-  private removeFilterChip(kind: "project" | "team" | "tag" | "type" | "typeAttr", value?: string) {
+  private removeFilterChip(
+    kind: "project" | "team" | "tag" | "type" | "typeAttr" | "excludeType" | "excludeTypeAttr",
+    value?: string
+  ) {
     if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
     else if (kind === "team") this.filters.teams = this.filters.teams.filter((v) => v !== value);
     else if (kind === "tag") this.filters.tags = this.filters.tags.filter((v) => v !== value);
@@ -189,6 +197,10 @@ export class LogbookView extends ItemView {
       this.filters.type = null;
       this.filters.typeAttr = null;
     } else if (kind === "typeAttr") this.filters.typeAttr = null;
+    else if (kind === "excludeType") {
+      this.filters.excludeType = null;
+      this.filters.excludeTypeAttr = null;
+    } else if (kind === "excludeTypeAttr") this.filters.excludeTypeAttr = null;
     this.afterFilterChange();
   }
 
