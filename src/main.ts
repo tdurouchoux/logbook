@@ -2,6 +2,7 @@ import { Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, LogbookSettings, LogbookSettingTab } from "./settings";
 import { LogbookView, VIEW_TYPE_LOGBOOK } from "./view/LogbookView";
 import { ALL_COMMANDS } from "./types";
+import { LogbookMcpServer } from "./mcp-server";
 
 const CREATION_COMMANDS = ALL_COMMANDS.map((c) => ({
   id: `new-${c.key}`,
@@ -11,9 +12,11 @@ const CREATION_COMMANDS = ALL_COMMANDS.map((c) => ({
 
 export default class LogbookPlugin extends Plugin {
   settings!: LogbookSettings;
+  private mcpServer: LogbookMcpServer | null = null;
 
   async onload() {
     await this.loadSettings();
+    if (this.settings.mcpEnabled) await this.startMcpServer();
     this.registerView(VIEW_TYPE_LOGBOOK, (leaf) => new LogbookView(leaf, this.settings));
     this.addRibbonIcon("book-open", "Open Logbook", () => this.activateView());
     this.addCommand({ id: "open-logbook", name: "Open Logbook", callback: () => this.activateView() });
@@ -38,6 +41,27 @@ export default class LogbookPlugin extends Plugin {
       });
     }
     this.addSettingTab(new LogbookSettingTab(this.app, this));
+  }
+
+  async onunload() {
+    await this.stopMcpServer();
+  }
+
+  private async startMcpServer() {
+    this.mcpServer = new LogbookMcpServer(this.app, this.settings);
+    await this.mcpServer.start(this.settings.mcpPort);
+  }
+
+  private async stopMcpServer() {
+    if (!this.mcpServer) return;
+    await this.mcpServer.stop();
+    this.mcpServer = null;
+  }
+
+  /** Called by the settings tab when the MCP enabled toggle or port changes. */
+  async restartMcpServer() {
+    await this.stopMcpServer();
+    if (this.settings.mcpEnabled) await this.startMcpServer();
   }
 
   async activateView(): Promise<LogbookView> {
