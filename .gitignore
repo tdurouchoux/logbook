@@ -1,1 +1,3 @@
 test_plugin/
+node_modules/
+main.js
