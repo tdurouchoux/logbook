@@ -13,15 +13,33 @@ export interface FilterState {
   tags: string[];
   type: NoteType | null;
   typeAttr: TypeAttrFilter | null;
+  excludeType: NoteType | null;
+  excludeTypeAttr: TypeAttrFilter | null;
 }
 
 export function emptyFilters(): FilterState {
-  return { query: "", projects: [], teams: [], tags: [], type: null, typeAttr: null };
+  return {
+    query: "",
+    projects: [],
+    teams: [],
+    tags: [],
+    type: null,
+    typeAttr: null,
+    excludeType: null,
+    excludeTypeAttr: null,
+  };
 }
 
 export function hasActiveFilters(f: FilterState): boolean {
   return (
-    !!f.query || f.projects.length > 0 || f.teams.length > 0 || f.tags.length > 0 || !!f.type || !!f.typeAttr
+    !!f.query ||
+    f.projects.length > 0 ||
+    f.teams.length > 0 ||
+    f.tags.length > 0 ||
+    !!f.type ||
+    !!f.typeAttr ||
+    !!f.excludeType ||
+    !!f.excludeTypeAttr
   );
 }
 
@@ -75,6 +93,9 @@ export function applyFilters(notes: LogNote[], filters: FilterState): LogNote[] 
   return notes.filter((n) => {
     if (filters.type && n.fm.type !== filters.type) return false;
     if (filters.typeAttr && !matchesTypeAttr(n, filters.typeAttr)) return false;
+    if (filters.excludeType && n.fm.type === filters.excludeType) {
+      if (!filters.excludeTypeAttr || matchesTypeAttr(n, filters.excludeTypeAttr)) return false;
+    }
     if (filters.projects.length && !filters.projects.every((p) => n.fm.projects.includes(p))) return false;
     if (filters.teams.length && !filters.teams.every((t) => n.fm.teams.includes(t))) return false;
     if (filters.tags.length && !filters.tags.every((t) => n.tags.includes(t))) return false;

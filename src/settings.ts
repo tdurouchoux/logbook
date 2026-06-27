@@ -8,13 +8,30 @@ export interface LogbookSettings {
    *  on creation only (never retroactively) — see design.md §7, §15. Empty/missing-file
    *  means no template, same as today's blank-body creation. */
   templates: Record<NoteType, string>;
+  /** Days since a draft note's mtime (last-modified) before it's auto-trashed
+   *  (design.md §5.1). `null` disables draft auto-delete entirely. */
+  draftTTLDays: number | null;
+  /** Days since a `done` task's mtime before it's auto-trashed, same mechanism
+   *  as draft auto-delete (design.md §5.1, §5.2). `null` disables it entirely. */
+  doneTaskTTLDays: number | null;
 }
 
 const DEFAULT_TEMPLATES: Record<NoteType, string> = Object.fromEntries(
   (Object.keys(NOTE_TYPES) as NoteType[]).map((t) => [t, `templates/${t}.md`])
 ) as Record<NoteType, string>;
 
-export const DEFAULT_SETTINGS: LogbookSettings = { folder: "logbook", templates: DEFAULT_TEMPLATES };
+export const DEFAULT_SETTINGS: LogbookSettings = {
+  folder: "logbook",
+  templates: DEFAULT_TEMPLATES,
+  draftTTLDays: 7,
+  doneTaskTTLDays: 7,
+};
+
+/** Parses a TTL settings text input: blank or non-positive means "disabled" (`null`). */
+function parseTTLDays(value: string): number | null {
+  const n = Number(value.trim());
+  return value.trim() && Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export class LogbookSettingTab extends PluginSettingTab {
   plugin: LogbookPlugin;
@@ -34,6 +51,30 @@ export class LogbookSettingTab extends PluginSettingTab {
       .addText((text) =>
         text.setValue(this.plugin.settings.folder).onChange(async (value) => {
           this.plugin.settings.folder = value.trim() || "logbook";
+          await this.plugin.saveSettings();
+        })
+      );
+
+    containerEl.createEl("h3", { text: "Auto-delete" });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "Leave blank to disable auto-delete for that type.",
+    });
+    new Setting(containerEl)
+      .setName("Draft TTL (days)")
+      .setDesc("Drafts not modified for this long are sent to trash on plugin load.")
+      .addText((text) =>
+        text.setValue(this.plugin.settings.draftTTLDays?.toString() ?? "").onChange(async (value) => {
+          this.plugin.settings.draftTTLDays = parseTTLDays(value);
+          await this.plugin.saveSettings();
+        })
+      );
+    new Setting(containerEl)
+      .setName("Done task TTL (days)")
+      .setDesc("Done tasks older than this (since last modified) are sent to trash on plugin load.")
+      .addText((text) =>
+        text.setValue(this.plugin.settings.doneTaskTTLDays?.toString() ?? "").onChange(async (value) => {
+          this.plugin.settings.doneTaskTTLDays = parseTTLDays(value);
           await this.plugin.saveSettings();
         })
       );

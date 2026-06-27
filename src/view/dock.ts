@@ -15,9 +15,13 @@ export interface DockCallbacks {
   onFilterTeam(name: string): void;
   onFilterTag(name: string): void;
   onFilterType(type: NoteType, attr?: { key: string; value: string }): void;
+  onExcludeType(type: NoteType, attr?: { key: string; value: string }): void;
   onClearFilters(): void;
   onOccurrence(meeting: RecurringMeetingRef): void;
-  onRemoveFilterChip(kind: "project" | "team" | "tag" | "type" | "typeAttr", value?: string): void;
+  onRemoveFilterChip(
+    kind: "project" | "team" | "tag" | "type" | "typeAttr" | "excludeType" | "excludeTypeAttr",
+    value?: string
+  ): void;
   getAllProjects(): string[];
   getAllTeams(): string[];
   getAllTags(): string[];
@@ -38,6 +42,7 @@ const UTILITY_COMMANDS = [
   { key: "team", desc: "Filter by team" },
   { key: "tag", desc: "Filter by tag" },
   { key: "type", desc: "Filter by note type" },
+  { key: "exclude", desc: "Hide a note type" },
   { key: "occurrence", desc: "Add/open today's occurrence" },
   { key: "clear", desc: "Remove all active filters" },
 ];
@@ -50,6 +55,7 @@ export class Dock {
   private items: DropdownItem[] = [];
   private idx = 0;
   private pendingType: NoteType | null = null;
+  private pendingExcludeType: NoteType | null = null;
 
   constructor(private dockEl: HTMLElement, private cb: DockCallbacks) {
     this.chipsEl = dockEl.createDiv("logbook-filter-chips");
@@ -87,6 +93,17 @@ export class Dock {
       const attrLabel = NOTE_TYPES[f.type].filterAttr?.label ?? "filter";
       this.addChip(attrLabel.toLowerCase(), f.typeAttr.value, () => this.cb.onRemoveFilterChip("typeAttr"));
     }
+    if (f.excludeType) {
+      this.addChip("exclude type", NOTE_TYPES[f.excludeType].label, () =>
+        this.cb.onRemoveFilterChip("excludeType")
+      );
+    }
+    if (f.excludeTypeAttr && f.excludeType) {
+      const attrLabel = NOTE_TYPES[f.excludeType].filterAttr?.label ?? "filter";
+      this.addChip(`exclude ${attrLabel.toLowerCase()}`, f.excludeTypeAttr.value, () =>
+        this.cb.onRemoveFilterChip("excludeTypeAttr")
+      );
+    }
   }
 
   private addChip(kind: string, value: string, onRemove: () => void, italic = false) {
@@ -107,6 +124,7 @@ export class Dock {
     this.inputEl.placeholder = "Write a note, or type / for a type…";
     this.phase = "idle";
     this.pendingType = null;
+    this.pendingExcludeType = null;
     this.closeDropdown();
   }
 
@@ -176,24 +194,28 @@ export class Dock {
       );
       return;
     }
-    if (cmdKey === "type") {
+    if (cmdKey === "type" || cmdKey === "exclude") {
+      const exclude = cmdKey === "exclude";
       const typeSpaceIdx = arg.indexOf(" ");
       if (typeSpaceIdx === -1) {
         // Still typing/filtering the type name itself.
-        this.pendingType = null;
+        if (exclude) this.pendingExcludeType = null;
+        else this.pendingType = null;
         this.phase = "pick-arg";
-        this.showTypeList(arg);
+        this.showTypeList(arg, exclude);
         return;
       }
       const typeKey = arg.slice(0, typeSpaceIdx).toLowerCase() as NoteType;
       const attrQuery = arg.slice(typeSpaceIdx + 1);
       if (NOTE_TYPES[typeKey]?.filterAttr) {
-        this.pendingType = typeKey;
+        if (exclude) this.pendingExcludeType = typeKey;
+        else this.pendingType = typeKey;
         this.phase = "pick-type-attr";
-        this.showTypeAttrList(attrQuery);
+        this.showTypeAttrList(attrQuery, exclude);
       } else {
         // Unknown type, or a valid type with no filterable attribute — nothing to propose.
-        this.pendingType = null;
+        if (exclude) this.pendingExcludeType = null;
+        else this.pendingType = null;
         this.closeDropdown();
       }
       return;
@@ -255,7 +277,8 @@ export class Dock {
     this.openDropdown();
   }
 
-  private showTypeList(query: string) {
+  private showTypeList(query: string, exclude: boolean) {
+    const cmd = exclude ? "exclude" : "type";
     const matches = (Object.keys(NOTE_TYPES) as NoteType[]).filter((t) => fuzzyMatch(query, t));
     this.items = matches.map((t) => ({
       render: (el, selected) => {
@@ -264,10 +287,14 @@ export class Dock {
       },
       select: () => {
         if (NOTE_TYPES[t].filterAttr) {
-          this.pendingType = t;
-          this.inputEl.value = `/type ${t} `;
+          if (exclude) this.pendingExcludeType = t;
+          else this.pendingType = t;
+          this.inputEl.value = `/${cmd} ${t} `;
           this.inputEl.focus();
           this.onInput();
+        } else if (exclude) {
+          this.cb.onExcludeType(t);
+          this.resetInput();
         } else {
           this.cb.onFilterType(t);
           this.resetInput();
@@ -278,8 +305,8 @@ export class Dock {
     this.openDropdown();
   }
 
-  private showTypeAttrList(query: string) {
-    const type = this.pendingType!;
+  private showTypeAttrList(query: string, exclude: boolean) {
+    const type = (exclude ? this.pendingExcludeType : this.pendingType)!;
     const options = ["— all", ...this.cb.getTypeAttrValues(type)];
     const matches = options.filter((v) => fuzzyMatch(query, v));
     this.items = matches.map((v) => ({
@@ -289,10 +316,11 @@ export class Dock {
       },
       select: () => {
         const attrKey = NOTE_TYPES[type].filterAttr!.key;
+        const filterFn = exclude ? this.cb.onExcludeType : this.cb.onFilterType;
         if (v === "— all") {
-          this.cb.onFilterType(type);
+          filterFn(type);
         } else {
-          this.cb.onFilterType(type, { key: attrKey, value: v });
+          filterFn(type, { key: attrKey, value: v });
         }
         this.resetInput();
       },
@@ -382,6 +410,14 @@ export class Dock {
     }
     if (f.tags.length) {
       this.cb.onRemoveFilterChip("tag", f.tags[f.tags.length - 1]);
+      return true;
+    }
+    if (f.excludeTypeAttr) {
+      this.cb.onRemoveFilterChip("excludeTypeAttr");
+      return true;
+    }
+    if (f.excludeType) {
+      this.cb.onRemoveFilterChip("excludeType");
       return true;
     }
     if (f.typeAttr) {

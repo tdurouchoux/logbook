@@ -213,13 +213,28 @@ export class NoteStore {
     });
   }
 
-  /** Trash (never hard-delete) draft notes older than 7 days, per design.md §5.1. */
-  async pruneOldDrafts(): Promise<void> {
+  /** Trash (never hard-delete) expired drafts and done tasks, per design.md §5.1/§5.2.
+   *  Both are keyed off mtime (last-modified) rather than `createdAt` — for a done task
+   *  there's no separate "doneAt" field, and the status-cycle save already bumps mtime
+   *  the moment it becomes done, so mtime is the meaningful "since" point for both types.
+   *  Either TTL being `null` disables pruning for that note type. */
+  async pruneExpiredNotes(): Promise<void> {
     const notes = await this.loadNotes();
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const draftCutoff =
+      this.settings.draftTTLDays != null ? Date.now() - this.settings.draftTTLDays * 24 * 60 * 60 * 1000 : null;
+    const doneCutoff =
+      this.settings.doneTaskTTLDays != null
+        ? Date.now() - this.settings.doneTaskTTLDays * 24 * 60 * 60 * 1000
+        : null;
     for (const note of notes) {
-      if (note.fm.type !== "draft") continue;
-      if (new Date(note.fm.createdAt).getTime() < cutoff) {
+      if (draftCutoff != null && note.fm.type === "draft" && note.file.stat.mtime < draftCutoff) {
+        await this.app.vault.trash(note.file, true);
+      } else if (
+        doneCutoff != null &&
+        note.fm.type === "task" &&
+        note.fm.status === "done" &&
+        note.file.stat.mtime < doneCutoff
+      ) {
         await this.app.vault.trash(note.file, true);
       }
     }
