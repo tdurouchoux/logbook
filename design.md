@@ -463,7 +463,7 @@ A consistent rule: dots and icons prefix every chip so filter context is readabl
 - **Incremental feed rendering** — a refresh never tears down and rebuilds the whole card list. Each note's card is keyed by file path and cached; a render reuses a note's existing card DOM unchanged unless that note's own frontmatter/body/mtime actually differs from what's cached, and a card that's currently expanded is never rebuilt out from under the user regardless of what changed elsewhere — only dividers and the top-level ordering are recomputed each time. This means a write to one note (and the settle-triggered refresh ~600ms later) only ever touches that note's own card, not every card in the feed. The one exception: the relative-time pill's text is refreshed on every render pass even for a reused/cached card, since it's a function of wall-clock time rather than the note's own data — otherwise it would stay frozen at whatever it said ("now", say) the last time that card was actually rebuilt, even hours later.
 - **No custom sync** — notes are plain `.md` files in the vault; whatever sync the user already has (iCloud, Obsidian Sync, git) handles them.
 - **Trash, not delete** — destructive operations (draft auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting.
-- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), plus one optional template-file path per note type (default `templates/<type>.md`), used to seed a new note's body on creation — see §7.
+- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), plus one optional template-file path per note type (default `templates/<type>.md`), used to seed a new note's body on creation — see §7. Also exposes the MCP server's enabled toggle and port — see §16.
 - **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
 - **Icons** — project (briefcase) and team (people) pill icons use Obsidian's built-in `setIcon()` API against the Lucide icon set, the same mechanism the collapse-mode title-bar action already uses (see §10) — no custom inline SVG.
 - **Type-change commits replace, not merge** — every other staged edit flushes via a `dirty` key set (only the changed keys get written into the existing frontmatter object). A staged type change can't use that path: it has to delete every key belonging to the old type's shape that isn't part of the new type's shape (e.g. a task's `status` shouldn't survive becoming a meeting) and write the new type's full field set, in the same single batched `processFrontMatter` call — a full replace of the type-specific slice of frontmatter, not an incremental patch.
@@ -491,3 +491,10 @@ The server is a thin adapter over data the plugin already maintains — every to
 A query row deliberately isn't a curated summary: since every note type's full field set already lives in one place (§2), returning it wholesale means the tool's output shape never drifts from the actual data model, and a new type-specific field just shows up automatically rather than needing the server updated to surface it.
 
 `tags` rides alongside frontmatter in every row even though it isn't a frontmatter field (§9 — it's Obsidian's own tag system, read from the metadata cache) — an agent shouldn't need a second call just to see what a note is tagged with.
+
+### Settings
+
+The server is off by default and configured from the same settings tab as everything else (§15):
+
+- **Enabled** — a toggle; the server only starts (on plugin load) and stops (on unload) based on this, since opening a local port isn't something that should happen silently just because the plugin is installed.
+- **Port** — the local port it listens on.
