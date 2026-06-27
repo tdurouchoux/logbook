@@ -8,6 +8,10 @@ export interface LogbookSettings {
    *  on creation only (never retroactively) — see design.md §7, §15. Empty/missing-file
    *  means no template, same as today's blank-body creation. */
   templates: Record<NoteType, string>;
+  /** Read-only MCP server (design.md §16) — off by default since opening a local
+   *  port shouldn't happen silently just because the plugin is installed. */
+  mcpEnabled: boolean;
+  mcpPort: number;
   /** Days since a draft note's mtime (last-modified) before it's auto-trashed
    *  (design.md §5.1). `null` disables draft auto-delete entirely. */
   draftTTLDays: number | null;
@@ -23,6 +27,8 @@ const DEFAULT_TEMPLATES: Record<NoteType, string> = Object.fromEntries(
 export const DEFAULT_SETTINGS: LogbookSettings = {
   folder: "logbook",
   templates: DEFAULT_TEMPLATES,
+  mcpEnabled: false,
+  mcpPort: 27124,
   draftTTLDays: 14,
   doneTaskTTLDays: 14,
 };
@@ -94,5 +100,33 @@ export class LogbookSettingTab extends PluginSettingTab {
         })
       );
     }
+
+    containerEl.createEl("h3", { text: "MCP server" });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text:
+        "Read-only access to this logbook for external agents over the Model Context Protocol " +
+        "(design.md §16). Off by default.",
+    });
+    new Setting(containerEl)
+      .setName("Enabled")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.mcpEnabled).onChange(async (value) => {
+          this.plugin.settings.mcpEnabled = value;
+          await this.plugin.saveSettings();
+          await this.plugin.restartMcpServer();
+        })
+      );
+    new Setting(containerEl)
+      .setName("Port")
+      .addText((text) =>
+        text.setValue(String(this.plugin.settings.mcpPort)).onChange(async (value) => {
+          const port = parseInt(value, 10);
+          if (Number.isNaN(port)) return;
+          this.plugin.settings.mcpPort = port;
+          await this.plugin.saveSettings();
+          await this.plugin.restartMcpServer();
+        })
+      );
   }
 }

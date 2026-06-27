@@ -466,9 +466,39 @@ A consistent rule: dots and icons prefix every chip so filter context is readabl
 - **Refresh suppression** — after a `processFrontMatter` call, vault events fire immediately. The feed suppresses re-renders for 600 ms afterward so an open expanded card isn't torn down mid-edit.
 - **Incremental feed rendering** — a refresh never tears down and rebuilds the whole card list. Each note's card is keyed by file path and cached; a render reuses a note's existing card DOM unchanged unless that note's own frontmatter/body/mtime actually differs from what's cached, and a card that's currently expanded is never rebuilt out from under the user regardless of what changed elsewhere — only dividers and the top-level ordering are recomputed each time. This means a write to one note (and the settle-triggered refresh ~600ms later) only ever touches that note's own card, not every card in the feed. The one exception: the relative-time pill's text is refreshed on every render pass even for a reused/cached card, since it's a function of wall-clock time rather than the note's own data — otherwise it would stay frozen at whatever it said ("now", say) the last time that card was actually rebuilt, even hours later.
 - **No custom sync** — notes are plain `.md` files in the vault; whatever sync the user already has (iCloud, Obsidian Sync, git) handles them.
-- **Trash, not delete** — destructive operations (draft/done-task auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting.
+- **Trash, not delete** — destructive operations (draft/done-task auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting. Also display the MCP options (enable button and port).
 - **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), one optional template-file path per note type (default `templates/<type>.md`) used to seed a new note's body on creation (see §7), and the draft/done-task auto-delete TTLs in days (default 14 each, see §5.1/§5.2) — each measured from the note's mtime, and each independently disabled by leaving its field blank.
 - **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
 - **Icons** — project (briefcase) and team (people) pill icons use Obsidian's built-in `setIcon()` API against the Lucide icon set, the same mechanism the collapse-mode title-bar action already uses (see §10) — no custom inline SVG.
 - **Type-change commits replace, not merge** — every other staged edit flushes via a `dirty` key set (only the changed keys get written into the existing frontmatter object). A staged type change can't use that path: it has to delete every key belonging to the old type's shape that isn't part of the new type's shape (e.g. a task's `status` shouldn't survive becoming a meeting) and write the new type's full field set, in the same single batched `processFrontMatter` call — a full replace of the type-specific slice of frontmatter, not an incremental patch.
 - **`pinned` follows an omit-when-absent convention** — written as `pinned: true` only when set, and set to `undefined` (not `false`) to unpin, so a healthy note's frontmatter never carries a stale `pinned: false`.
+
+---
+
+## 16. MCP server (read-only query access)
+
+The plugin can expose its logbook contents to an external agent (e.g. an LLM coding assistant) over the Model Context Protocol — a local server, embedded in the plugin process, that runs while the vault is open. It's **read-only for now**: an agent can explore notes by type, project, team, and tag, and read full note content, but cannot create or edit anything. Write access is a deliberately separate, not-yet-decided extension.
+
+The server is a thin adapter over data the plugin already maintains — every tool below is backed directly by `NoteStore.loadNotes()` and `applyFilters` (§8), not a reimplementation of vault access or filtering logic.
+
+### Tools
+
+| Tool | Parameters | Returns |
+|---|---|---|
+| `list_note_types` | *(none)* | The static type catalog (§2): for each of the seven types, its `label`, `desc`, and — if it has one — its filterable attribute's key, label, and valid values (e.g. task → `status`: `todo`/`done`/`suspended`). Describes the schema only; independent of what's actually in the vault, so it works the same on an empty logbook as a full one. This is an agent's entrypoint — read this first to learn the vocabulary before querying. |
+| `list_projects` | *(none)* | Every distinct `projects[]` value in use, with a count of notes carrying it. |
+| `list_teams` | *(none)* | Every distinct `teams[]` value in use, with a count. |
+| `list_tags` | *(none)* | Every distinct tag in use (Obsidian's own tag system — frontmatter `tags` + inline `#tags`, see §9), with a count. |
+| `query_notes` | `type?`, `projects?[]`, `teams?[]`, `tags?[]`, `query?` (fuzzy text, same matching as the dock's search mode, §7), `typeAttr?: {key, value}`, `limit?`, `offset?` | One row per matching note, sorted by activity timestamp (§3) descending by default. Each row is that note's **entire frontmatter object as stored** — common fields plus whatever's specific to its type (§2) — merged with its `tags`, but **no body**. Filters AND together, mirroring `FilterState` (§8) exactly. |
+| `get_notes` | `ids: string[]` | The same row shape as `query_notes`, for one or more notes by `id`, plus each note's `body`. The intended flow is `query_notes` to scan broadly and cheaply, then one `get_notes` call to pull full content for whichever subset turned out to matter — rather than returning bodies for every match up front, or fetching them one at a time. |
+
+A query row deliberately isn't a curated summary: since every note type's full field set already lives in one place (§2), returning it wholesale means the tool's output shape never drifts from the actual data model, and a new type-specific field just shows up automatically rather than needing the server updated to surface it.
+
+`tags` rides alongside frontmatter in every row even though it isn't a frontmatter field (§9 — it's Obsidian's own tag system, read from the metadata cache) — an agent shouldn't need a second call just to see what a note is tagged with.
+
+### Settings
+
+The server is off by default and configured from the same settings tab as everything else (§15):
+
+- **Enabled** — a toggle; the server only starts (on plugin load) and stops (on unload) based on this, since opening a local port isn't something that should happen silently just because the plugin is installed.
+- **Port** — the local port it listens on.
