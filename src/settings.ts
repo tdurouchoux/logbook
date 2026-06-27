@@ -23,8 +23,8 @@ const DEFAULT_TEMPLATES: Record<NoteType, string> = Object.fromEntries(
 export const DEFAULT_SETTINGS: LogbookSettings = {
   folder: "logbook",
   templates: DEFAULT_TEMPLATES,
-  draftTTLDays: 7,
-  doneTaskTTLDays: 7,
+  draftTTLDays: 14,
+  doneTaskTTLDays: 14,
 };
 
 /** Parses a TTL settings text input: blank or non-positive means "disabled" (`null`). */
