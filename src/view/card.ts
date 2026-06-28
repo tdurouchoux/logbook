@@ -470,6 +470,20 @@ function renderTypeFields(
   onFieldKeydown: (e: KeyboardEvent) => void
 ) {
   if (isMeeting(note) || isRecurring(note)) {
+    const themeRow = container.createDiv("logbook-field-row");
+    themeRow.createEl("label", { text: "Theme" });
+    const themeInput = themeRow.createEl("input", {
+      cls: "logbook-field-input",
+      attr: { type: "text", spellcheck: "false", placeholder: "+ theme" },
+    });
+    themeInput.value = note.fm.theme ?? "";
+    themeInput.addEventListener("input", () => {
+      note.fm.theme = themeInput.value;
+      dirty.add("theme");
+    });
+    themeInput.addEventListener("click", (e) => e.stopPropagation());
+    themeInput.addEventListener("keydown", onFieldKeydown);
+
     const attendeesRow = container.createDiv("logbook-field-row");
     attendeesRow.createEl("label", { text: "Attendees" });
     const attendeesWrap = attendeesRow.createDiv();

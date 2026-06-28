@@ -65,8 +65,8 @@ A note can be pinned, independent of its type — `pinned: true` in frontmatter,
 |---|---|---|
 | **Draft** | *(none)* — auto-deleted 7 days after `createdAt` | warm gray |
 | **Task** | `status: todo \| done \| suspended` | amber |
-| **Meeting** | `agenda: meetup \| presentation \| workshop \| crisis \| decision \| other`, `attendees[]` | dusty blue |
-| **Recurring** | `attendees[]`, `occurrences[]` | teal |
+| **Meeting** | `agenda: meetup \| presentation \| workshop \| crisis \| decision \| other`, `attendees[]`, `theme` (optional) | dusty blue |
+| **Recurring** | `attendees[]`, `occurrences[]`, `theme` (optional) | teal |
 | **Thoughts** | *(none)* | muted plum |
 | **Knowledge** | `techStack[]` | moss green |
 | **Design** | `status: exploring \| in-review \| decided` | dusty violet |
@@ -197,7 +197,7 @@ Conversion rules:
 
 - Every common field (§2) — `id`, `title`, `projects`, `teams`, `createdAt`, `pinned` — is preserved unchanged.
 - Every field specific to the *old* type is dropped.
-- Every field specific to the *new* type is (re)initialized to the same default it would get from `/<type>` on a brand-new note: `status: todo` for task, `status: exploring` for design, `agenda: meetup` with empty `attendees: []` for meeting, empty `attendees: []` and empty `occurrences: []` for recurring (converting *to* recurring this way never seeds today's occurrence or its body heading the way `/recurring` does — the occurrence-creation scaffolding in §5.3 only runs at note creation, not on a type change), empty `techStack: []` for knowledge, `question`/`landed` left unset for thoughts, nothing extra for draft.
+- Every field specific to the *new* type is (re)initialized to the same default it would get from `/<type>` on a brand-new note: `status: todo` for task, `status: exploring` for design, `agenda: meetup` with empty `attendees: []` and empty `theme` for meeting, empty `attendees: []`, empty `occurrences: []`, and empty `theme` for recurring (converting *to* recurring this way never seeds today's occurrence or its body heading the way `/recurring` does — the occurrence-creation scaffolding in §5.3 only runs at note creation, not on a type change), empty `techStack: []` for knowledge, `question`/`landed` left unset for thoughts, nothing extra for draft.
 - No attempt is made to map between same-named-but-different-domain fields — task's and design's `status` enums don't share values (`todo`/`done`/`suspended` vs. `exploring`/`in-review`/`decided`), so converting between them always resets to the new type's default rather than guessing an equivalent.
 - The note's body is never touched. For a recurring meeting specifically, this means converting it away leaves its `## <date>` occurrence headings sitting in the body as plain content — only the `attendees`/`occurrences` frontmatter is dropped, the headings themselves don't disappear.
 - This is a lossy operation by design — dropped fields are simply gone once the card is saved. There's no confirmation step: it's a frontmatter-only change, the note itself is never deleted, and switching back doesn't un-lose the old fields' values any more than re-running `/task` on a `/design` note ever would have.
@@ -229,6 +229,7 @@ Notes from a single conversation.
 
 - `agenda`: `meetup`, `presentation`, `workshop`, `crisis`, `decision`, or `other`. The meeting type's filterable attribute (see §2, §4): on the collapsed card, clicking the pill applies an `agenda` filter; on the expanded card, clicking it instead cycles to the next value and stages the change, the same way task/design's `status` pill behaves (see §4, §5.2).
 - `attendees[]` (first names, shown inline on the card).
+- `theme` — optional free-text subject of the meeting (e.g. "Q3 roadmap"), a plain labeled input on the expanded card, not filterable.
 - Badge color: dusty blue.
 
 ### 5.4 Recurring
@@ -236,6 +237,7 @@ Notes from a single conversation.
 A meeting that happens repeatedly, tracked as one note per series rather than one note per occurrence.
 
 - `attendees[]` (first names, shown inline on the card).
+- `theme` — optional free-text subject of the series (e.g. "Weekly sync"), a plain labeled input on the expanded card, not filterable.
 - Each occurrence is stored as a second-level heading (`## 2025-05-14`, ISO date) inside the single file's body, most recent first. `occurrences[]` in frontmatter mirrors those dates for fast indexing, but the `##` headings in the body are the canonical structure.
 - No filterable attribute (see §2).
 - Card indicator: `N occurrences`, plus the date of the latest one.
