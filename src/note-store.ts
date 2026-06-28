@@ -135,9 +135,9 @@ export class NoteStore {
     } else if (type === "design") {
       lines.push("status: exploring");
     } else if (type === "meeting") {
-      lines.push("agenda: meetup", "attendees: []");
+      lines.push("agenda: meetup", "attendees: []", 'theme: ""');
     } else if (type === "recurring") {
-      lines.push("attendees: []");
+      lines.push("attendees: []", 'theme: ""');
     } else if (type === "knowledge") {
       lines.push("techStack: []");
     }
@@ -266,6 +266,7 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
         type: "meeting",
         agenda: (raw.agenda as any) ?? "meetup",
         attendees: Array.isArray(raw.attendees) ? raw.attendees.map(String) : [],
+        theme: typeof raw.theme === "string" ? raw.theme : "",
       };
     case "recurring":
       return {
@@ -273,6 +274,7 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
         type: "recurring",
         attendees: Array.isArray(raw.attendees) ? raw.attendees.map(String) : [],
         occurrences: Array.isArray(raw.occurrences) ? raw.occurrences.map(String) : [],
+        theme: typeof raw.theme === "string" ? raw.theme : "",
       };
     case "thoughts":
       return { ...base, type: "thoughts" };

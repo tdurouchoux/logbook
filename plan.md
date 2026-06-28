@@ -109,3 +109,12 @@ A read-only Model Context Protocol server, embedded in the plugin process, expos
 - **`manifest.json`** — flipped `isDesktopOnly` to `true`: the server is built on Node's `http` module, unavailable in Obsidian Mobile's runtime.
 
 Manual QA in a live vault is still outstanding for this phase: enabling the toggle and confirming an MCP client can connect over Streamable HTTP and round-trip all five tools against real notes, restart-on-settings-change (toggle off/on, port change) actually rebinding the port, and confirming the server cleanly stops on plugin unload/reload during `npm run dev`.
+
+## Status: done — Phase 31 (`theme` field on Meeting/Recurring)
+
+`design.md` §2/§4/§5.3/§5.4 now document an optional, free-text `theme` field on meeting and recurring notes (e.g. "Q3 roadmap", "Weekly sync") — not filterable, not part of the type's pill row, just a plain labeled input on the expanded card.
+
+- **`types.ts`** — `MeetingFrontmatter`/`RecurringFrontmatter` gained an optional `theme?: string`. `convertType()` now seeds `theme: ""` when converting to either type, matching `attendees: []`'s treatment.
+- **`note-store.ts`** — `createNote()` writes `theme: ""` into the initial frontmatter block for both types; `normalizeFrontmatter()` reads `raw.theme` (falling back to `""` if absent/non-string) for both.
+- **`card.ts`** — `renderTypeFields()` renders a new labeled text input (reusing the existing `.logbook-field-input` style, same as other plain type-specific fields) above the attendees picker for both meeting and recurring, staging edits into `dirty` like every other field.
+- **`filters.ts`** — `fieldsOf()` includes `theme` in both types' searchable fields, so free-text search matches it.

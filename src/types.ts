@@ -90,12 +90,16 @@ export interface MeetingFrontmatter extends CommonFrontmatter {
   type: "meeting";
   agenda: MeetingAgenda;
   attendees: string[];
+  /** Free-text subject of the meeting, e.g. "Q3 roadmap". Optional. */
+  theme?: string;
 }
 
 export interface RecurringFrontmatter extends CommonFrontmatter {
   type: "recurring";
   attendees: string[];
   occurrences: string[]; // ISO dates, most recent first
+  /** Free-text subject of the series, e.g. "Weekly sync". Optional. */
+  theme?: string;
 }
 
 export interface ThoughtsFrontmatter extends CommonFrontmatter {
@@ -173,9 +177,9 @@ export function convertType(fm: NoteFrontmatter, toType: NoteType): NoteFrontmat
     case "design":
       return { ...base, type: "design", status: "exploring" };
     case "meeting":
-      return { ...base, type: "meeting", agenda: "meetup", attendees: [] };
+      return { ...base, type: "meeting", agenda: "meetup", attendees: [], theme: "" };
     case "recurring":
-      return { ...base, type: "recurring", attendees: [], occurrences: [] };
+      return { ...base, type: "recurring", attendees: [], occurrences: [], theme: "" };
     case "knowledge":
       return { ...base, type: "knowledge", techStack: [] };
     case "thoughts":
