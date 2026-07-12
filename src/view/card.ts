@@ -14,7 +14,7 @@ import {
   MEETING_AGENDAS,
 } from "../types";
 import { NoteStore } from "../note-store";
-import { relativeTime } from "../utils";
+import { relativeTime, formatDeadline, isPastDeadline } from "../utils";
 import { fuzzyMatchRanges } from "../filters";
 import { renderPicker } from "./pickers";
 
@@ -199,6 +199,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   }
 
   let occurrenceInfoEl: HTMLElement | null = null;
+  let deadlineInfoEl: HTMLElement | null = null;
 
   const previewWrap = header.createDiv("logbook-card-preview-wrap");
   let stackRowEl: HTMLElement | null = null;
@@ -337,6 +338,19 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
       header.insertBefore(occurrenceInfoEl, previewWrap);
     }
 
+    if (deadlineInfoEl) {
+      deadlineInfoEl.remove();
+      deadlineInfoEl = null;
+    }
+    if (isTask(note) && note.fm.deadline) {
+      const overdue = note.fm.status !== "done" && isPastDeadline(note.fm.deadline);
+      deadlineInfoEl = header.createEl("div", {
+        cls: `logbook-deadline-info${overdue ? " is-overdue" : ""}`,
+        text: `Due ${formatDeadline(note.fm.deadline)}`,
+      });
+      header.insertBefore(deadlineInfoEl, previewWrap);
+    }
+
     if (stackRowEl) {
       stackRowEl.remove();
       stackRowEl = null;
@@ -469,6 +483,22 @@ function renderTypeFields(
   dirty: Set<string>,
   onFieldKeydown: (e: KeyboardEvent) => void
 ) {
+  if (isTask(note)) {
+    const row = container.createDiv("logbook-field-row");
+    row.createEl("label", { text: "Deadline" });
+    const input = row.createEl("input", {
+      cls: "logbook-field-input",
+      attr: { type: "date" },
+    });
+    input.value = note.fm.deadline ?? "";
+    input.addEventListener("input", () => {
+      note.fm.deadline = input.value || undefined;
+      dirty.add("deadline");
+    });
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("keydown", onFieldKeydown);
+  }
+
   if (isMeeting(note) || isRecurring(note)) {
     const themeRow = container.createDiv("logbook-field-row");
     themeRow.createEl("label", { text: "Theme" });

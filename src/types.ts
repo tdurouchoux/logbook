@@ -84,6 +84,8 @@ export interface CommonFrontmatter {
 export interface TaskFrontmatter extends CommonFrontmatter {
   type: "task";
   status: TaskStatus;
+  /** Optional ISO date ("YYYY-MM-DD"); omitted (not "") when not set. */
+  deadline?: string;
 }
 
 export interface MeetingFrontmatter extends CommonFrontmatter {
@@ -191,7 +193,7 @@ export function convertType(fm: NoteFrontmatter, toType: NoteType): NoteFrontmat
 
 /** "YYYY-MM-DD" parsed as a local-midnight Date — the bare `Date` string constructor
  *  treats date-only strings as UTC, which can land on the wrong local calendar day. */
-function localDateFromISO(iso: string): Date {
+export function localDateFromISO(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }

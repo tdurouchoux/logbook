@@ -761,6 +761,16 @@
     margin-top: 2px;
 }
 
+.logbook-deadline-info {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 2px;
+}
+.logbook-deadline-info.is-overdue {
+    color: var(--text-error);
+    font-weight: 600;
+}
+
 /* ── Type-specific field rows (expanded only) ───────────────────────────── */
 
 .logbook-type-fields {
@@ -1002,6 +1012,7 @@
 .logbook-view.is-collapse-mode .logbook-pills-row,
 .logbook-view.is-collapse-mode .logbook-time,
 .logbook-view.is-collapse-mode .logbook-occurrence-info,
+.logbook-view.is-collapse-mode .logbook-deadline-info,
 .logbook-view.is-collapse-mode .logbook-chevron,
 .logbook-view.is-collapse-mode .logbook-pin-indicator {
     display: none;

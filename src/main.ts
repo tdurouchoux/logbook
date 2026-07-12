@@ -17,7 +17,10 @@ export default class LogbookPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
     if (this.settings.mcpEnabled) await this.startMcpServer();
-    this.registerView(VIEW_TYPE_LOGBOOK, (leaf) => new LogbookView(leaf, this.settings));
+    this.registerView(
+      VIEW_TYPE_LOGBOOK,
+      (leaf) => new LogbookView(leaf, this.settings, () => this.saveSettings())
+    );
     this.addRibbonIcon("book-open", "Open Logbook", () => this.activateView());
     this.addCommand({ id: "open-logbook", name: "Open Logbook", callback: () => this.activateView() });
     this.addCommand({
@@ -70,7 +73,9 @@ export default class LogbookPlugin extends Plugin {
       this.app.workspace.revealLeaf(existing[0]);
       return existing[0].view as LogbookView;
     }
-    const leaf = this.app.workspace.getLeaf("tab");
+    // Opens in the left sidebar by default (falls back to a main-area tab if the
+    // workspace has no left split at all, which getLeftLeaf can return null for).
+    const leaf = this.app.workspace.getLeftLeaf(false) ?? this.app.workspace.getLeaf("tab");
     await leaf.setViewState({ type: VIEW_TYPE_LOGBOOK, active: true });
     this.app.workspace.revealLeaf(leaf);
     return leaf.view as LogbookView;
