@@ -129,3 +129,12 @@ Four independent changes, none specced up front — `design.md` §2/§3/§5.2/§
 - **Opens in the left sidebar.** `main.ts`'s `activateView()` swapped `this.app.workspace.getLeaf("tab")` for `this.app.workspace.getLeftLeaf(false) ?? this.app.workspace.getLeaf("tab")` — every entry point (ribbon icon, `Open Logbook` command, command-palette creation shortcuts) funnels through this one method, so all of them now place a freshly-opened view in the left sidebar instead of a main-area tab. Reusing/revealing an already-open view is unchanged.
 
 Manual QA in a live vault is still outstanding for this phase: the deadline date picker's staging/commit round-trip and overdue styling once a task's deadline has passed, `/saveview`/`/view` end-to-end (including overwrite-by-same-name and the settings tab's delete button), the new date-divider bucket boundaries against a vault with genuinely old notes (multi-month/multi-year), and confirming `getLeftLeaf(false)` behaves as expected across different existing workspace layouts (no left sidebar at all, left sidebar already showing another view, Logbook already open elsewhere).
+
+## Status: done — Phase 33 (search bar: Enter-to-submit, fixed a real Enter-creates-a-draft bug)
+
+`design.md` §7/§12 already said free text "never creates a note" and that `Enter` "submits the search query" — `dock.ts` didn't actually match either: `onInput()` called `onSearch()` on every keystroke (live filtering, not on-Enter), and `handleEnter()`'s plain-text branch called `this.cb.onCreate("draft", val)`, silently creating a draft note out of whatever the user had typed to search for. Fixed both, since it's the same bar and the same bug surfaces either way (typing to search, then reflexively hitting Enter, created an unwanted draft):
+
+- **`onInput()`** no longer calls `this.cb.onSearch(val)` for non-`/` text — typing alone doesn't touch the feed anymore.
+- **`handleEnter()`** — the plain-text (non-`/`) branch now calls `this.cb.onSearch(val)` instead of `this.cb.onCreate("draft", val)`, and doesn't clear the input afterward (so the submitted query stays visible, same as a normal search box). The redundant `if (!val) return` guard ahead of the `/`-branch was dead once the plain-text case returns early, so it (and the now-pointless block it wrapped) was removed rather than left in place.
+
+No other dock behavior changed: `/` commands, dropdown navigation, filter chips, and `Backspace`-to-remove-most-recent-filter are all unaffected — this only touched the two plain-text code paths.

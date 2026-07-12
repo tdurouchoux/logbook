@@ -282,9 +282,10 @@ A single input at the bottom of the view, with two modes.
 ### Search mode (default)
 
 - Free text is a search query: each whitespace-separated term is fuzzy-matched (typo-tolerant, out-of-order-character-tolerant — Obsidian's own `prepareFuzzySearch`, the same matcher behind its quick switcher) independently, and all terms must match (AND) somewhere across `title`, `body`, `projects`, `teams`, and every type-specific field, treated as one combined haystack per note. It does not match tags — free-text tag search is still Obsidian's own search/tag pane's job; the plugin's only tag-aware affordance is the dedicated `/tag` filter command (see §9). A fuzzy match is filter-only: it doesn't change the feed's sort order, which stays the same chronological/day-grouped order described in §3 regardless of which notes a query lets through.
+- **Submitted on `Enter`, not applied live** — typing into the bar doesn't filter the feed as you type; the query only takes effect once `Enter` is pressed (see §12), same as the rest of the bar's Enter-driven flows. This also means the previous query keeps filtering the feed while you're mid-edit of a new one, rather than the feed flickering through every intermediate keystroke.
 - Matches are highlighted (see §6) in card previews while the query is active.
 - When filters are active, the bar shows their chips to the left of the input (see §8).
-- Free text never creates a note — note creation only happens through `/` commands.
+- Free text never creates a note, on `Enter` or otherwise — note creation only happens through `/` commands.
 
 ### Command mode (`/`)
 
