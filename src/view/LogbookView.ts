@@ -1,8 +1,9 @@
-import { ItemView, MarkdownView, TAbstractFile, TFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownView, Notice, TAbstractFile, TFile, WorkspaceLeaf } from "obsidian";
 import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
 import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_AGENDAS, activityTimestamp } from "../types";
-import { FilterState, applyFilters, emptyFilters, hasActiveFilters } from "../filters";
+import { FilterState, applyFilters, emptyFilters, hasActiveFilters, filterSnapshot } from "../filters";
+import { generateId } from "../utils";
 import { renderFeed, CardCache } from "./feed";
 import { CardContext } from "./card";
 import { Dock, RecurringMeetingRef } from "./dock";
@@ -30,7 +31,11 @@ export class LogbookView extends ItemView {
 
   private dock!: Dock;
 
-  constructor(leaf: WorkspaceLeaf, private settings: LogbookSettings) {
+  constructor(
+    leaf: WorkspaceLeaf,
+    private settings: LogbookSettings,
+    private persistSettings: () => Promise<void>
+  ) {
     super(leaf);
     this.store = new NoteStore(this.app, settings);
   }
@@ -78,11 +83,14 @@ export class LogbookView extends ItemView {
       },
       onOccurrence: (meeting) => void this.handleOccurrence(meeting),
       onRemoveFilterChip: (kind, value) => this.removeFilterChip(kind, value),
+      onApplyView: (name) => this.applyView(name),
+      onSaveView: (name) => void this.saveView(name),
       getAllProjects: () => this.collectPool((n) => n.fm.projects),
       getAllTeams: () => this.collectPool((n) => n.fm.teams),
       getAllTags: () => this.collectPool((n) => n.tags),
       getTypeAttrValues: (type) => this.typeAttrValues(type),
       getRecurringMeetings: () => this.recurringMeetings(),
+      getAllViews: () => this.settings.views.map((v) => v.name),
       getFilters: () => this.filters,
     });
 
@@ -207,6 +215,30 @@ export class LogbookView extends ItemView {
   private afterFilterChange() {
     this.dock.renderChips();
     this.renderDisplay();
+  }
+
+  /** /view <name> — applies a saved filter combination on top of the current
+   *  search query, which a view deliberately doesn't capture (see filterSnapshot). */
+  private applyView(name: string) {
+    const view = this.settings.views.find((v) => v.name === name);
+    if (!view) return;
+    this.filters = { ...this.filters, ...view.filters };
+    this.afterFilterChange();
+    new Notice(`Applied view "${name}"`);
+  }
+
+  /** /saveview <name> — snapshots the currently active filters as a new saved
+   *  view, or overwrites an existing one of the same name. */
+  private async saveView(name: string) {
+    const snapshot = filterSnapshot(this.filters);
+    const existing = this.settings.views.find((v) => v.name === name);
+    if (existing) {
+      existing.filters = snapshot;
+    } else {
+      this.settings.views.push({ id: generateId(), name, filters: snapshot });
+    }
+    await this.persistSettings();
+    new Notice(`Saved view "${name}"`);
   }
 
   private collectPool(pick: (n: LogNote) => string[]): string[] {

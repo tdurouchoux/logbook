@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type LogbookPlugin from "./main";
 import { NoteType, NOTE_TYPES } from "./types";
+import { SavedView } from "./filters";
 
 export interface LogbookSettings {
   folder: string;
@@ -18,6 +19,10 @@ export interface LogbookSettings {
   /** Days since a `done` task's mtime before it's auto-trashed, same mechanism
    *  as draft auto-delete (design.md §5.1, §5.2). `null` disables it entirely. */
   doneTaskTTLDays: number | null;
+  /** Saved filter combinations ("views"), applied/created via /view and /saveview
+   *  in the command bar. Plugin-level config, not vault content — same footing
+   *  as the folder path/TTLs/templates above. */
+  views: SavedView[];
 }
 
 const DEFAULT_TEMPLATES: Record<NoteType, string> = Object.fromEntries(
@@ -31,6 +36,7 @@ export const DEFAULT_SETTINGS: LogbookSettings = {
   mcpPort: 27124,
   draftTTLDays: 14,
   doneTaskTTLDays: 14,
+  views: [],
 };
 
 /** Parses a TTL settings text input: blank or non-positive means "disabled" (`null`). */
@@ -98,6 +104,29 @@ export class LogbookSettingTab extends PluginSettingTab {
           this.plugin.settings.templates[type] = value.trim();
           await this.plugin.saveSettings();
         })
+      );
+    }
+
+    containerEl.createEl("h3", { text: "Views" });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text:
+        "Saved filter combinations — apply one with /view <name> in the command bar, " +
+        "or save the currently active filters as a new one with /saveview <name>.",
+    });
+    if (this.plugin.settings.views.length === 0) {
+      containerEl.createEl("p", { cls: "setting-item-description", text: "No saved views yet." });
+    }
+    for (const view of this.plugin.settings.views) {
+      new Setting(containerEl).setName(view.name).addExtraButton((btn) =>
+        btn
+          .setIcon("trash-2")
+          .setTooltip("Delete view")
+          .onClick(async () => {
+            this.plugin.settings.views = this.plugin.settings.views.filter((v) => v.id !== view.id);
+            await this.plugin.saveSettings();
+            this.display();
+          })
       );
     }
 

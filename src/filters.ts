@@ -17,6 +17,29 @@ export interface FilterState {
   excludeTypeAttr: TypeAttrFilter | null;
 }
 
+/** The subset of FilterState a saved view captures — everything but free-text
+ *  query, which stays a per-session search rather than part of a filter combo. */
+export type SavedViewFilters = Omit<FilterState, "query">;
+
+export interface SavedView {
+  id: string;
+  name: string;
+  filters: SavedViewFilters;
+}
+
+/** Snapshot of the currently active filters (minus query) for saving as a view. */
+export function filterSnapshot(f: FilterState): SavedViewFilters {
+  return {
+    projects: f.projects,
+    teams: f.teams,
+    tags: f.tags,
+    type: f.type,
+    typeAttr: f.typeAttr,
+    excludeType: f.excludeType,
+    excludeTypeAttr: f.excludeTypeAttr,
+  };
+}
+
 export function emptyFilters(): FilterState {
   return {
     query: "",
@@ -48,7 +71,7 @@ function fieldsOf(note: LogNote): string[] {
   const fields = [fm.title, note.body, ...(fm.projects ?? []), ...(fm.teams ?? [])];
   switch (fm.type) {
     case "task":
-      fields.push(fm.status);
+      fields.push(fm.status, fm.deadline);
       break;
     case "meeting":
       fields.push(fm.agenda, fm.theme, ...(fm.attendees ?? []));

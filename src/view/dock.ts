@@ -22,11 +22,14 @@ export interface DockCallbacks {
     kind: "project" | "team" | "tag" | "type" | "typeAttr" | "excludeType" | "excludeTypeAttr",
     value?: string
   ): void;
+  onApplyView(name: string): void;
+  onSaveView(name: string): void;
   getAllProjects(): string[];
   getAllTeams(): string[];
   getAllTags(): string[];
   getTypeAttrValues(type: NoteType): string[];
   getRecurringMeetings(): RecurringMeetingRef[];
+  getAllViews(): string[];
   getFilters(): FilterState;
 }
 
@@ -44,6 +47,8 @@ const UTILITY_COMMANDS = [
   { key: "type", desc: "Filter by note type" },
   { key: "exclude", desc: "Hide a note type" },
   { key: "occurrence", desc: "Add/open today's occurrence" },
+  { key: "view", desc: "Apply a saved view" },
+  { key: "saveview", desc: "Save active filters as a view" },
   { key: "clear", desc: "Remove all active filters" },
 ];
 
@@ -131,11 +136,12 @@ export class Dock {
   private onInput() {
     const val = this.inputEl.value;
     if (!val.startsWith("/")) {
+      // Plain text is a search query, but it's only submitted on Enter (see
+      // handleEnter) — no live filtering as the user types.
       this.phase = "idle";
       this.inputEl.removeClass("is-command");
       this.inputEl.placeholder = "Write a note, or type / for a type…";
       this.closeDropdown();
-      this.cb.onSearch(val);
       return;
     }
 
@@ -178,6 +184,20 @@ export class Dock {
         this.cb.onFilterTag(v);
         this.resetInput();
       });
+      return;
+    }
+    if (cmdKey === "view") {
+      this.phase = "pick-arg";
+      this.showPickList(arg, this.cb.getAllViews(), (v) => {
+        this.cb.onApplyView(v);
+        this.resetInput();
+      });
+      return;
+    }
+    if (cmdKey === "saveview") {
+      this.phase = "free-arg";
+      this.closeDropdown();
+      this.inputEl.placeholder = "View name…";
       return;
     }
     if (cmdKey === "occurrence") {
@@ -433,37 +453,42 @@ export class Dock {
 
   private handleEnter() {
     const val = this.inputEl.value.trim();
-    if (!val) return;
 
-    if (val.startsWith("/")) {
-      const rest = val.slice(1);
-      const spaceIdx = rest.indexOf(" ");
-      if (spaceIdx === -1) {
-        if (rest.toLowerCase() === "clear") {
-          this.cb.onClearFilters();
-          this.resetInput();
-        }
-        return;
-      }
-      const cmdKey = rest.slice(0, spaceIdx).toLowerCase();
-      const title = rest.slice(spaceIdx + 1).trim();
-      if (cmdKey === "clear") {
+    if (!val.startsWith("/")) {
+      // Plain text is always a search query, submitted only on Enter (no live
+      // updates while typing) — it never creates a note (design.md §7); note
+      // creation only happens through `/` commands.
+      this.cb.onSearch(val);
+      return;
+    }
+
+    const rest = val.slice(1);
+    const spaceIdx = rest.indexOf(" ");
+    if (spaceIdx === -1) {
+      if (rest.toLowerCase() === "clear") {
         this.cb.onClearFilters();
         this.resetInput();
-        return;
       }
-      if (!title) return;
-      if (cmdKey === "recurring") {
-        this.cb.onCreateRecurring(title);
-        this.resetInput();
-      } else if (NOTE_TYPES[cmdKey as NoteType]) {
-        this.cb.onCreate(cmdKey as NoteType, title);
-        this.resetInput();
-      }
-      // project/team/type/occurrence are handled via dropdown selection, not free Enter.
-    } else {
-      this.cb.onCreate("draft", val);
+      return;
+    }
+    const cmdKey = rest.slice(0, spaceIdx).toLowerCase();
+    const title = rest.slice(spaceIdx + 1).trim();
+    if (cmdKey === "clear") {
+      this.cb.onClearFilters();
+      this.resetInput();
+      return;
+    }
+    if (!title) return;
+    if (cmdKey === "saveview") {
+      this.cb.onSaveView(title);
+      this.resetInput();
+    } else if (cmdKey === "recurring") {
+      this.cb.onCreateRecurring(title);
+      this.resetInput();
+    } else if (NOTE_TYPES[cmdKey as NoteType]) {
+      this.cb.onCreate(cmdKey as NoteType, title);
       this.resetInput();
     }
+    // project/team/type/view/occurrence are handled via dropdown selection, not free Enter.
   }
 }

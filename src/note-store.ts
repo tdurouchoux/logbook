@@ -259,6 +259,7 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
         ...base,
         type: "task",
         status: (raw.status as any) ?? "todo",
+        deadline: typeof raw.deadline === "string" ? raw.deadline : undefined,
       };
     case "meeting":
       return {
