@@ -24,6 +24,14 @@ export default class LogbookPlugin extends Plugin {
     this.addRibbonIcon("book-open", "Open Logbook", () => this.activateView());
     this.addCommand({ id: "open-logbook", name: "Open Logbook", callback: () => this.activateView() });
     this.addCommand({
+      id: "focus-logbook-input",
+      name: "Focus Logbook input",
+      callback: async () => {
+        const view = await this.activateView();
+        view.focusDockInput();
+      },
+    });
+    this.addCommand({
       id: "close-logbook-card",
       name: "Close and save expanded Logbook card",
       hotkeys: [{ modifiers: ["Mod"], key: "Enter" }],
