@@ -268,7 +268,10 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
       e.stopPropagation();
       const menu = new Menu();
       for (const t of Object.keys(NOTE_TYPES) as NoteType[]) {
-        if (t === note.fm.type || t === "daily") continue;
+        // Deprecated types (design) stay valid as a source — an existing
+        // design note can still convert away — but are never offered as a
+        // target, same as daily's structural exclusion above.
+        if (t === note.fm.type || t === "daily" || NOTE_TYPES[t].deprecated) continue;
         menu.addItem((item) => {
           item.setTitle(NOTE_TYPES[t].label);
           item.onClick(() => applyTypeChange(t));

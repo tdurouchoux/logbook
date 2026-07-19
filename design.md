@@ -71,7 +71,7 @@ A note can be pinned, independent of its type — `pinned: true` in frontmatter,
 | **Recurring** | `attendees[]`, `occurrences[]`, `theme` (optional) | teal |
 | **Thoughts** | *(none)* | muted plum |
 | **Knowledge** | `techStack[]` | moss green |
-| **Design** | `status: exploring \| in-review \| decided` | dusty violet |
+| **Design** *(deprecated, see §5.7)* | `status: exploring \| in-review \| decided` | dusty violet |
 | **Daily** | *(none)* — and, uniquely, **no `projects`/`teams` either** (see §5.8) | terracotta |
 
 ### Type-level filterable attributes
@@ -189,7 +189,7 @@ other type-specific fields…
 - No body preview while expanded — see above.
 - Footer, left to right: the hint text (`⌘↵ save / esc collapse`), then a **Change type** button, then an explicit **Save** button, then a trash-bin button pinned to the bottom-right corner of the card — delete stays the absolute last/rightmost control, same as before.
   - **Save**: identical effect to `⌘↵` — flushes every staged edit (commit, below) and collapses the card. It exists specifically because the global `Mod+Enter` hotkey depends on keyboard focus and keybinding behavior that's proven unreliable in practice (§12) — the button always works regardless of where focus is or what else is bound to that combination.
-  - **Change type**: opens a small menu listing the other six types by name (the same list the `/type` command's first step uses). Picking one stages a type change exactly like any other field edit — nothing is written until the card closes (Save, `⌘↵`, click-away, or switching cards) — and `Esc` discards a staged type change the same way it discards any other staged edit. See "Changing a note's type" below for what the conversion actually does.
+  - **Change type**: opens a small menu listing every other *creatable* type by name — daily (§5.8) and deprecated design (§5.7) are never offered as a target, regardless of which note is being converted, and the button is absent entirely on a daily note's own card (§5.8). Picking one stages a type change exactly like any other field edit — nothing is written until the card closes (Save, `⌘↵`, click-away, or switching cards) — and `Esc` discards a staged type change the same way it discards any other staged edit. See "Changing a note's type" below for what the conversion actually does.
   - **Delete**: clicking it **soft-deletes** the note — `app.vault.trash()`, the same never-hard-delete mechanism already used for draft auto-delete (§5.1), so it's recoverable from the vault's configured trash location. A single accidental click can't delete anything: the first click puts the button into an armed/confirming state (e.g. a red fill, for a few seconds) without doing anything yet; a second click while armed actually deletes, anything else (the timeout elapsing, or the card closing) disarms it back to the normal state. Deleting discards any staged-but-unsaved edits on that card outright — there's nothing to commit. The card itself disappears from the feed via the same vault `delete` event that already drives live refresh elsewhere (§15), not a special case.
 - **Nothing is written to disk while a field is being edited.** Every property edit — title, the filterable-property pill, project/team pills, every type-specific field, the pin toggle, and a type change — updates the card's own UI immediately (and the in-memory note, so filtering/sorting elsewhere stays consistent) but is only staged, not saved. Staged edits are flushed to disk — as a rename (if the title changed) plus a single batched `processFrontMatter` call for everything else — the moment the card is explicitly closed: `⌘↵`, the **Save** button, clicking elsewhere to collapse, or expanding a different card. `Esc` discards the staged edits instead of saving them: since nothing was written yet, discarding is just re-reading the note's still-unchanged frontmatter and re-rendering the card from it, then collapsing.
 - `⌘↵` and the footer's explicit **Save** button do the same thing and exist redundantly for the same reason: `⌘↵` works two ways — as a global hotkey (`Mod+Enter`) that closes/saves whichever card is currently expanded regardless of which pane has focus (needed because expanding a card opens its note in Obsidian's editor and usually moves keyboard focus there), and as a `keydown` listener attached directly to every field input inside the card itself (title, every plain type-specific input, and every picker's text input) — so it also works the instant focus is still inside the card's own title or property fields, without depending on the keystroke bubbling up past a picker's own Enter-to-add handling. In practice this has repeatedly proven unreliable, which is why the **Save** button exists: a plain click that always works no matter where focus landed. `Esc` is wired the same way as `⌘↵`, on both the card and every field.
@@ -207,7 +207,7 @@ Creating a note from the command bar follows the same rule, since the resulting 
 
 ### Changing a note's type
 
-The **Change type** button in the expanded card's footer (see above) is the only way to convert a note from one type to another after creation. Clicking it opens a dropdown of the other six types; picking one stages the conversion immediately — the expanded card's type-specific fields (§5) re-render right there to match the new type, and the badge and filterable-property pill update too — but, like every other staged edit, nothing is written to disk until the card closes.
+The **Change type** button in the expanded card's footer (see above) is the only way to convert a note from one type to another after creation. Clicking it opens a dropdown of the other creatable types (daily and deprecated design are never offered as a target, see §4's "Expanded" section above); picking one stages the conversion immediately — the expanded card's type-specific fields (§5) re-render right there to match the new type, and the badge and filterable-property pill update too — but, like every other staged edit, nothing is written to disk until the card closes.
 
 Conversion rules:
 
@@ -274,12 +274,13 @@ Something worth remembering — a fact, snippet, quote, definition.
 - `techStack[]` — optional list of technologies/concepts. Card shows a small uppercase `STACK` label alongside it. Not a filterable attribute for now (see §2) — no header pill, no filter-on-click.
 - Badge color: moss green.
 
-### 5.7 Design
+### 5.7 Design *(deprecated)*
 
 Technical design of part of a project.
 
 - `status`: `exploring`, `in-review`, or `decided`. Filterable.
 - Badge color: dusty violet.
+- **Deprecated: no longer creatable.** `/design` no longer exists in the command bar's `/` dropdown or as a command-palette entry, and "Design" is never offered as a target in another note's "Change type" menu (§4). This is a creation-only decommission — a note that already has `type: design` in an existing vault is completely unaffected: it still loads, renders its badge and status pill (filter-on-click while collapsed, cycle-on-click while expanded, same as ever), is found by `/type design`/`/exclude design`, is fully editable and deletable, and its own "Change type" button still works, so it can still be converted *away* to any other (non-deprecated, non-daily) type whenever the user wants to move on from it. Nothing on disk is touched or migrated by the decommission itself.
 
 ### 5.8 Daily
 
@@ -329,7 +330,8 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 | `/recurring [title]` | New recurring meeting with one occurrence dated today |
 | `/thoughts [title]` | New thoughts note |
 | `/knowledge [title]` | New knowledge note |
-| `/design [title]` | New design note |
+
+`/design` is deliberately absent — design is deprecated (§5.7): still a fully working type for notes that already have it, just no longer offered as a way to create a new one.
 
 **`/daily [text]`** — unlike every command above, this doesn't create a titled note; it targets *today's* daily note (§5.8), auto-created if it doesn't exist yet, and behaves differently depending on whether text follows it:
 
@@ -364,7 +366,7 @@ The dropdown fuzzy-matches by prefix as the user types. `Tab` selects the highli
 
 ### Command palette
 
-The eight creation commands (`/draft`, `/task`, `/meeting`, `/recurring`, `/thoughts`, `/knowledge`, `/design`, `/daily`) also exist as standalone entries in Obsidian's own command palette — `Logbook: New draft`, `Logbook: New task`, …, `Logbook: New daily` — reachable, and hotkey-bindable via Obsidian's own hotkey settings, from anywhere in the vault, not just while the Logbook view is open or focused. Picking one reveals the Logbook view (opening it first if it isn't already), then prefills the command bar with `/<type> ` and focuses it — for every type but daily this is ready to type a title, the exact same flow as picking that command from the bar's own dropdown; for daily, pressing `Enter` with nothing typed after the prefilled `/daily ` opens today's note instead (§5.8), since daily has no title to type.
+The seven creatable types' creation commands (`/draft`, `/task`, `/meeting`, `/recurring`, `/thoughts`, `/knowledge`, `/daily`) also exist as standalone entries in Obsidian's own command palette — deprecated `design` (§5.7) is excluded here too, for the same reason it's absent from the `/` dropdown — `Logbook: New draft`, `Logbook: New task`, …, `Logbook: New daily` — reachable, and hotkey-bindable via Obsidian's own hotkey settings, from anywhere in the vault, not just while the Logbook view is open or focused. Picking one reveals the Logbook view (opening it first if it isn't already), then prefills the command bar with `/<type> ` and focuses it — for every type but daily this is ready to type a title, the exact same flow as picking that command from the bar's own dropdown; for daily, pressing `Enter` with nothing typed after the prefilled `/daily ` opens today's note instead (§5.8), since daily has no title to type.
 
 Filter commands (`/project`, `/team`, `/tag`, `/type`, `/view`, `/saveview`, `/clear`) and `/occurrence` are deliberately not mirrored in the command palette: they only do something useful once the feed they affect is already in view, so there's no benefit to firing them blind from elsewhere in the vault — unlike creation, which is a quick-capture action you'd want mid-thought, regardless of what note you're currently in.
 
@@ -498,7 +500,7 @@ Inside any project/team input:
 - **Pinned divider** — same shape as a date divider, labeled "Pinned," always the last divider in the feed (§3).
 - **Pin glyph** — top-right corner, alongside the chevron and age pill; filled when pinned, absent entirely when not. Indicator-only while collapsed; a clickable toggle once expanded (§4).
 - **Save button** — expanded card footer; explicit equivalent of `⌘↵` (§4, §12).
-- **Change-type button** — expanded card footer; opens a dropdown of the other six types and stages a frontmatter conversion (§4).
+- **Change-type button** — expanded card footer; opens a dropdown of the other creatable types (daily and deprecated design excluded as targets, §4) and stages a frontmatter conversion.
 - **Collapse toggle** — a chevron view action in the pane's title bar; toggles title-only view.
 
 A consistent rule: dots and icons prefix every chip so filter context is readable without relying on color.
@@ -516,7 +518,7 @@ A consistent rule: dots and icons prefix every chip so filter context is readabl
 - **Incremental feed rendering** — a refresh never tears down and rebuilds the whole card list. Each note's card is keyed by file path and cached; a render reuses a note's existing card DOM unchanged unless that note's own frontmatter/body/mtime actually differs from what's cached, and a card that's currently expanded is never rebuilt out from under the user regardless of what changed elsewhere — only dividers and the top-level ordering are recomputed each time. This means a write to one note (and the settle-triggered refresh ~600ms later) only ever touches that note's own card, not every card in the feed. The one exception: the relative-time pill's text is refreshed on every render pass even for a reused/cached card, since it's a function of wall-clock time rather than the note's own data — otherwise it would stay frozen at whatever it said ("now", say) the last time that card was actually rebuilt, even hours later.
 - **No custom sync** — notes are plain `.md` files in the vault; whatever sync the user already has (iCloud, Obsidian Sync, git) handles them.
 - **Trash, not delete** — destructive operations (draft/done-task auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting. Also display the MCP options (enable button and port).
-- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), one optional template-file path per note type (default `templates/<type>.md`) used to seed a new note's body on creation (see §7), the draft/done-task auto-delete TTLs in days (default 14 each, see §5.1/§5.2) — each measured from the note's mtime, and each independently disabled by leaving its field blank — the daily status bar's idle threshold in minutes (default 90, see §3, §5.8; unlike the TTLs above, not disableable, since the status bar always has a red/orange/green reading) — and the list of saved views (see §8), each with a delete button.
+- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), one optional template-file path per *creatable* note type (default `templates/<type>.md`, no row for deprecated `design`, since a template only ever seeds a note on creation) used to seed a new note's body on creation (see §7), the draft/done-task auto-delete TTLs in days (default 14 each, see §5.1/§5.2) — each measured from the note's mtime, and each independently disabled by leaving its field blank — the daily status bar's idle threshold in minutes (default 90, see §3, §5.8; unlike the TTLs above, not disableable, since the status bar always has a red/orange/green reading) — and the list of saved views (see §8), each with a delete button.
 - **Opens in the left sidebar by default** — the ribbon icon, the `Open Logbook` command, and every command-palette creation shortcut (see §7) all funnel through the same `activateView()`, which places a freshly-opened Logbook view in the left sidebar (falling back to a main-area tab only if the workspace has no left split at all) rather than a main-area tab, and reveals/reuses the existing view if one's already open anywhere in the workspace.
 - **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
 - **Icons** — project (briefcase) and team (people) pill icons use Obsidian's built-in `setIcon()` API against the Lucide icon set, the same mechanism the collapse-mode title-bar action already uses (see §10) — no custom inline SVG.

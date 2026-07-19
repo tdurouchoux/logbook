@@ -125,7 +125,10 @@ export class LogbookSettingTab extends PluginSettingTab {
         "Optional vault path to a template note per type, used to seed a new note's body on creation. " +
         "Leave blank or point at a file that doesn't exist to skip — the note is created empty, as before.",
     });
+    // A template path only ever matters at creation time, so a deprecated
+    // type (design) — no longer creatable — gets no row here.
     for (const [type, cfg] of Object.entries(NOTE_TYPES) as [NoteType, (typeof NOTE_TYPES)[NoteType]][]) {
+      if (cfg.deprecated) continue;
       new Setting(containerEl).setName(cfg.label).addText((text) =>
         text.setValue(this.plugin.settings.templates[type] ?? "").onChange(async (value) => {
           this.plugin.settings.templates[type] = value.trim();
