@@ -7,7 +7,8 @@ export type NoteType =
   | "recurring"
   | "thoughts"
   | "knowledge"
-  | "design";
+  | "design"
+  | "daily";
 
 export type TaskStatus = "todo" | "done" | "suspended";
 export type DesignStatus = "exploring" | "in-review" | "decided";
@@ -19,6 +20,15 @@ export interface NoteTypeConfig {
   desc: string;
   /** Type-specific filterable attribute, if any (key into the note's fields). */
   filterAttr?: { key: string; label: string };
+  /** True for a type whose notes never carry projects/teams (daily) — hides
+   *  the pickers on the card entirely rather than showing them empty. */
+  hidePickers?: boolean;
+  /** True for a decommissioned type (design): no longer offered anywhere new
+   *  notes get created (the `/` dropdown, the command palette, or as a
+   *  "Change type" target) — but any note that already has this type in an
+   *  existing vault keeps loading, rendering, filtering, and editing exactly
+   *  as before. See design.md §5.7. */
+  deprecated?: boolean;
 }
 
 export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
@@ -51,6 +61,13 @@ export const NOTE_TYPES: Record<NoteType, NoteTypeConfig> = {
     color: "#9b6db5",
     desc: "Technical design note",
     filterAttr: { key: "status", label: "Status" },
+    deprecated: true,
+  },
+  daily: {
+    label: "Daily",
+    color: "#d97757",
+    desc: "Quick log of what got done today",
+    hidePickers: true,
   },
 };
 
@@ -65,9 +82,12 @@ export const MEETING_AGENDAS: MeetingAgenda[] = [
   "other",
 ];
 
-export const ALL_COMMANDS = (Object.entries(NOTE_TYPES) as [NoteType, NoteTypeConfig][]).map(
-  ([key, cfg]) => ({ key, ...cfg })
-);
+/** Creation commands (the `/` dropdown, the command palette) — excludes
+ *  deprecated types (design), which stay fully supported for existing notes
+ *  but are no longer offered as a way to create new ones. */
+export const ALL_COMMANDS = (Object.entries(NOTE_TYPES) as [NoteType, NoteTypeConfig][])
+  .filter(([, cfg]) => !cfg.deprecated)
+  .map(([key, cfg]) => ({ key, ...cfg }));
 
 /** Common frontmatter fields shared by every note type, per design.md §2. */
 export interface CommonFrontmatter {
@@ -122,6 +142,10 @@ export interface DraftFrontmatter extends CommonFrontmatter {
   type: "draft";
 }
 
+export interface DailyFrontmatter extends CommonFrontmatter {
+  type: "daily";
+}
+
 export type NoteFrontmatter =
   | TaskFrontmatter
   | MeetingFrontmatter
@@ -129,7 +153,8 @@ export type NoteFrontmatter =
   | ThoughtsFrontmatter
   | KnowledgeFrontmatter
   | DesignFrontmatter
-  | DraftFrontmatter;
+  | DraftFrontmatter
+  | DailyFrontmatter;
 
 /** A note loaded from the vault: frontmatter fields plus the file/body it came from.
  *  `tags` is Obsidian's own native tag set (frontmatter `tags` + inline `#tags`,
@@ -159,6 +184,9 @@ export function isKnowledge(n: LogNote): n is LogNote & { fm: KnowledgeFrontmatt
 export function isDesign(n: LogNote): n is LogNote & { fm: DesignFrontmatter } {
   return n.fm.type === "design";
 }
+export function isDaily(n: LogNote): n is LogNote & { fm: DailyFrontmatter } {
+  return n.fm.type === "daily";
+}
 
 /** Converts frontmatter to another note type per design.md's conversion rules:
  *  keep common fields, drop everything type-specific, fill in the new type's defaults
@@ -186,6 +214,8 @@ export function convertType(fm: NoteFrontmatter, toType: NoteType): NoteFrontmat
       return { ...base, type: "knowledge", techStack: [] };
     case "thoughts":
       return { ...base, type: "thoughts" };
+    case "daily":
+      return { ...base, type: "daily" };
     default:
       return { ...base, type: "draft" };
   }

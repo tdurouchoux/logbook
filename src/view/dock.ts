@@ -11,6 +11,8 @@ export interface DockCallbacks {
   onSearch(query: string): void;
   onCreate(type: NoteType, title: string): void;
   onCreateRecurring(title: string): void;
+  onOpenDaily(): void;
+  onAppendDaily(text: string): void;
   onFilterProject(name: string): void;
   onFilterTeam(name: string): void;
   onFilterTag(name: string): void;
@@ -240,12 +242,21 @@ export class Dock {
       }
       return;
     }
+    if (cmdKey === "daily") {
+      this.phase = "free-arg";
+      this.closeDropdown();
+      this.inputEl.placeholder = "Log a task (blank = open today's note)…";
+      return;
+    }
 
     // Creation command — free text title, no dropdown.
     this.phase = "free-arg";
     this.closeDropdown();
     const typeInfo = NOTE_TYPES[cmdKey as NoteType];
-    this.inputEl.placeholder = typeInfo ? `${typeInfo.label} title…` : "Note title…";
+    // A deprecated type (e.g. design) isn't creatable anymore even though it's
+    // still a valid NOTE_TYPES entry for rendering/filtering existing notes —
+    // don't imply otherwise with its label in the placeholder.
+    this.inputEl.placeholder = typeInfo && !typeInfo.deprecated ? `${typeInfo.label} title…` : "Note title…";
   }
 
   private showCommandList(prefix: string) {
@@ -468,6 +479,9 @@ export class Dock {
       if (rest.toLowerCase() === "clear") {
         this.cb.onClearFilters();
         this.resetInput();
+      } else if (rest.toLowerCase() === "daily") {
+        this.cb.onOpenDaily();
+        this.resetInput();
       }
       return;
     }
@@ -478,6 +492,12 @@ export class Dock {
       this.resetInput();
       return;
     }
+    if (cmdKey === "daily") {
+      if (title) this.cb.onAppendDaily(title);
+      else this.cb.onOpenDaily();
+      this.resetInput();
+      return;
+    }
     if (!title) return;
     if (cmdKey === "saveview") {
       this.cb.onSaveView(title);
@@ -485,7 +505,10 @@ export class Dock {
     } else if (cmdKey === "recurring") {
       this.cb.onCreateRecurring(title);
       this.resetInput();
-    } else if (NOTE_TYPES[cmdKey as NoteType]) {
+    } else if (NOTE_TYPES[cmdKey as NoteType] && !NOTE_TYPES[cmdKey as NoteType].deprecated) {
+      // A deprecated type (e.g. design) can't be typed into existence even by
+      // bypassing the dropdown — it's excluded from ALL_COMMANDS, but this
+      // branch reads NOTE_TYPES directly, so it needs its own guard.
       this.cb.onCreate(cmdKey as NoteType, title);
       this.resetInput();
     }

@@ -10,6 +10,7 @@ import {
   isRecurring,
   isKnowledge,
   isDesign,
+  isDaily,
   convertType,
   MEETING_AGENDAS,
 } from "../types";
@@ -43,6 +44,11 @@ export function buildCard(note: LogNote, ctx: CardContext): HTMLElement {
 
 function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const isExpanded = ctx.isExpanded(note.file.path);
+  // Daily notes never convert to/from another type (card.ts's Change-type menu
+  // excludes them), so whether pickers are hidden is fixed for this card's
+  // whole lifetime — safe to decide once here rather than in
+  // refreshTypeDependentUI().
+  const initialTypeInfo = NOTE_TYPES[note.fm.type] ?? NOTE_TYPES.draft;
 
   const card = parent.createDiv("logbook-card");
   if (isExpanded) card.addClass("is-expanded");
@@ -72,47 +78,49 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const pillsRow = top.createDiv("logbook-pills-row");
   let filterLineEl: HTMLElement | null = null;
 
-  const projectLine = renderPillLine(pillsRow, "Projects");
-  const projectRow = projectLine.createDiv("logbook-project-row");
-  renderPicker(projectRow, {
-    values: note.fm.projects,
-    pool: ctx.pools.projects,
-    placeholder: "+ project",
-    chipClass: "logbook-pill logbook-project-chip",
-    icon: "briefcase",
-    onChange: (next) => {
-      note.fm.projects = next;
-      dirty.add("projects");
-    },
-  });
-  // Clicking an existing project chip's label (not its × or the input) filters by it.
-  projectRow.querySelectorAll(".logbook-project-chip .logbook-pill-label").forEach((el, i) => {
-    el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      ctx.onFilterProject(note.fm.projects[i]);
+  if (!initialTypeInfo.hidePickers) {
+    const projectLine = renderPillLine(pillsRow, "Projects");
+    const projectRow = projectLine.createDiv("logbook-project-row");
+    renderPicker(projectRow, {
+      values: note.fm.projects,
+      pool: ctx.pools.projects,
+      placeholder: "+ project",
+      chipClass: "logbook-pill logbook-project-chip",
+      icon: "briefcase",
+      onChange: (next) => {
+        note.fm.projects = next;
+        dirty.add("projects");
+      },
     });
-  });
+    // Clicking an existing project chip's label (not its × or the input) filters by it.
+    projectRow.querySelectorAll(".logbook-project-chip .logbook-pill-label").forEach((el, i) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        ctx.onFilterProject(note.fm.projects[i]);
+      });
+    });
 
-  const teamLine = renderPillLine(pillsRow, "Teams");
-  const teamRow = teamLine.createDiv("logbook-team-row");
-  renderPicker(teamRow, {
-    values: note.fm.teams,
-    pool: ctx.pools.teams,
-    placeholder: "+ team",
-    chipClass: "logbook-pill logbook-team-chip",
-    icon: "users",
-    onChange: (next) => {
-      note.fm.teams = next;
-      dirty.add("teams");
-    },
-  });
-  // Clicking an existing team chip's label (not its × or the input) filters by it.
-  teamRow.querySelectorAll(".logbook-team-chip .logbook-pill-label").forEach((el, i) => {
-    el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      ctx.onFilterTeam(note.fm.teams[i]);
+    const teamLine = renderPillLine(pillsRow, "Teams");
+    const teamRow = teamLine.createDiv("logbook-team-row");
+    renderPicker(teamRow, {
+      values: note.fm.teams,
+      pool: ctx.pools.teams,
+      placeholder: "+ team",
+      chipClass: "logbook-pill logbook-team-chip",
+      icon: "users",
+      onChange: (next) => {
+        note.fm.teams = next;
+        dirty.add("teams");
+      },
     });
-  });
+    // Clicking an existing team chip's label (not its × or the input) filters by it.
+    teamRow.querySelectorAll(".logbook-team-chip .logbook-pill-label").forEach((el, i) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        ctx.onFilterTeam(note.fm.teams[i]);
+      });
+    });
+  }
 
   // Pin glyph (design.md §4): same node in both states — a pure indicator while
   // collapsed (hidden entirely when not pinned, via CSS), a clickable toggle once
@@ -243,27 +251,35 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
 
-  // Change type (design.md §4, §15): opens a small menu of the other five types;
+  // Change type (design.md §4, §15): opens a small menu of the other types;
   // picking one stages a conversion via convertType() and re-renders the
   // type-dependent UI in place — nothing is written until the card closes.
-  const typeBtn = expandFooter.createEl("button", {
-    cls: "logbook-type-btn",
-    attr: { type: "button" },
-  });
-  typeBtn.createSpan({ text: "Change type" });
-  setIcon(typeBtn.createSpan({ cls: "logbook-type-btn-chevron" }), "chevron-down");
-  typeBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const menu = new Menu();
-    for (const t of Object.keys(NOTE_TYPES) as NoteType[]) {
-      if (t === note.fm.type) continue;
-      menu.addItem((item) => {
-        item.setTitle(NOTE_TYPES[t].label);
-        item.onClick(() => applyTypeChange(t));
-      });
-    }
-    menu.showAtMouseEvent(e);
-  });
+  // Daily notes are excluded entirely, both as a source and a target: their
+  // filename is date-keyed and they carry no projects/teams, neither of which
+  // convertType()'s generic common-field carryover was designed around.
+  if (!isDaily(note)) {
+    const typeBtn = expandFooter.createEl("button", {
+      cls: "logbook-type-btn",
+      attr: { type: "button" },
+    });
+    typeBtn.createSpan({ text: "Change type" });
+    setIcon(typeBtn.createSpan({ cls: "logbook-type-btn-chevron" }), "chevron-down");
+    typeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = new Menu();
+      for (const t of Object.keys(NOTE_TYPES) as NoteType[]) {
+        // Deprecated types (design) stay valid as a source — an existing
+        // design note can still convert away — but are never offered as a
+        // target, same as daily's structural exclusion above.
+        if (t === note.fm.type || t === "daily" || NOTE_TYPES[t].deprecated) continue;
+        menu.addItem((item) => {
+          item.setTitle(NOTE_TYPES[t].label);
+          item.onClick(() => applyTypeChange(t));
+        });
+      }
+      menu.showAtMouseEvent(e);
+    });
+  }
 
   // Save (design.md §4, §12): explicit equivalent of ⌘↵, since the global hotkey
   // has proven unreliable depending on where keyboard focus lands.
