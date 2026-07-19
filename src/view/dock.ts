@@ -11,6 +11,8 @@ export interface DockCallbacks {
   onSearch(query: string): void;
   onCreate(type: NoteType, title: string): void;
   onCreateRecurring(title: string): void;
+  onOpenDaily(): void;
+  onAppendDaily(text: string): void;
   onFilterProject(name: string): void;
   onFilterTeam(name: string): void;
   onFilterTag(name: string): void;
@@ -238,6 +240,12 @@ export class Dock {
         else this.pendingType = null;
         this.closeDropdown();
       }
+      return;
+    }
+    if (cmdKey === "daily") {
+      this.phase = "free-arg";
+      this.closeDropdown();
+      this.inputEl.placeholder = "Log a task (blank = open today's note)…";
       return;
     }
 
@@ -468,6 +476,9 @@ export class Dock {
       if (rest.toLowerCase() === "clear") {
         this.cb.onClearFilters();
         this.resetInput();
+      } else if (rest.toLowerCase() === "daily") {
+        this.cb.onOpenDaily();
+        this.resetInput();
       }
       return;
     }
@@ -475,6 +486,12 @@ export class Dock {
     const title = rest.slice(spaceIdx + 1).trim();
     if (cmdKey === "clear") {
       this.cb.onClearFilters();
+      this.resetInput();
+      return;
+    }
+    if (cmdKey === "daily") {
+      if (title) this.cb.onAppendDaily(title);
+      else this.cb.onOpenDaily();
       this.resetInput();
       return;
     }

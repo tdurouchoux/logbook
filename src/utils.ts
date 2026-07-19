@@ -105,6 +105,16 @@ export function isPastDeadline(iso: string): boolean {
   return localDateFromISO(iso).getTime() < today.getTime();
 }
 
+/** A daily note's frontmatter title, e.g. "Sunday, July 19, 2026". */
+export function formatDailyTitle(d: Date): string {
+  return d.toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
+
+/** Counts logged list items in a daily note's body (design.md §3's status bar). */
+export function countLoggedItems(body: string): number {
+  return body.split("\n").filter((l) => /^\s*-\s+\S/.test(l)).length;
+}
+
 export function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(

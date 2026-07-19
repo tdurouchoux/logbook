@@ -23,6 +23,11 @@ export interface LogbookSettings {
    *  in the command bar. Plugin-level config, not vault content — same footing
    *  as the folder path/TTLs/templates above. */
   views: SavedView[];
+  /** Minutes since a daily note's mtime before the status bar (design.md §16)
+   *  switches from green to orange. Not nullable — unlike the TTLs, there's no
+   *  sensible "disabled" state for a threshold that always has a red/orange/green
+   *  reading. */
+  dailyIdleMinutes: number;
 }
 
 const DEFAULT_TEMPLATES: Record<NoteType, string> = Object.fromEntries(
@@ -37,12 +42,20 @@ export const DEFAULT_SETTINGS: LogbookSettings = {
   draftTTLDays: 14,
   doneTaskTTLDays: 14,
   views: [],
+  dailyIdleMinutes: 90,
 };
 
 /** Parses a TTL settings text input: blank or non-positive means "disabled" (`null`). */
 function parseTTLDays(value: string): number | null {
   const n = Number(value.trim());
   return value.trim() && Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Parses the daily idle-threshold text input: blank/non-positive keeps the
+ *  previous value, since (unlike a TTL) there's no "disabled" state for it. */
+function parseIdleMinutes(value: string, fallback: number): number {
+  const n = Number(value.trim());
+  return value.trim() && Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 export class LogbookSettingTab extends PluginSettingTab {
@@ -87,6 +100,20 @@ export class LogbookSettingTab extends PluginSettingTab {
       .addText((text) =>
         text.setValue(this.plugin.settings.doneTaskTTLDays?.toString() ?? "").onChange(async (value) => {
           this.plugin.settings.doneTaskTTLDays = parseTTLDays(value);
+          await this.plugin.saveSettings();
+        })
+      );
+
+    containerEl.createEl("h3", { text: "Daily notes" });
+    new Setting(containerEl)
+      .setName("Idle threshold (minutes)")
+      .setDesc(
+        "The status bar turns orange once this long has passed since the last logged task, " +
+          "and green again once you log another."
+      )
+      .addText((text) =>
+        text.setValue(this.plugin.settings.dailyIdleMinutes.toString()).onChange(async (value) => {
+          this.plugin.settings.dailyIdleMinutes = parseIdleMinutes(value, this.plugin.settings.dailyIdleMinutes);
           await this.plugin.saveSettings();
         })
       );

@@ -42,7 +42,7 @@ Renaming the file when the title is edited inline (see §4) must go through `app
 ```yaml
 ---
 id: <stable identifier>   # generated on creation, never changes
-type: draft               # one of the seven types below
+type: draft               # one of the eight types below
 title: "Note title"
 projects: []              # free-form, lowercase-hyphenated; a note can belong to multiple
 teams: []                 # same shape as projects, but for people/groups
@@ -50,6 +50,8 @@ createdAt: <ISO>
 pinned: true              # optional; omitted entirely when not pinned — see §3, §4
 ---
 ```
+
+`projects`/`teams` are common to every type except **daily** (§5.8), which never writes either key at all — a deliberate exception to keep daily notes friction-free.
 
 There is no plugin-managed `updatedAt` field. "Last activity" is read straight off the file itself — `file.stat.mtime`, which Obsidian already maintains for every file on every write, whether that write came from the plugin (a frontmatter edit) or from editing the body directly in Obsidian's native editor. Re-opening and closing a note without edits doesn't touch `mtime`, so it doesn't reorder the feed either.
 
@@ -59,7 +61,7 @@ Tags are not a plugin-managed field. A note may or may not carry a `tags` frontm
 
 A note can be pinned, independent of its type — `pinned: true` in frontmatter, omitted entirely (not written as `false`) when not pinned. Pinning is toggled from the expanded card and changes nothing else about the note — it keeps its type, its filterability, its activity timestamp. See §3 for where pinned notes appear in the feed and §4 for the toggle itself.
 
-### The seven note types
+### The eight note types
 
 | Type | Extra fields | Badge color |
 |---|---|---|
@@ -70,6 +72,7 @@ A note can be pinned, independent of its type — `pinned: true` in frontmatter,
 | **Thoughts** | *(none)* | muted plum |
 | **Knowledge** | `techStack[]` | moss green |
 | **Design** | `status: exploring \| in-review \| decided` | dusty violet |
+| **Daily** | *(none)* — and, uniquely, **no `projects`/`teams` either** (see §5.8) | terracotta |
 
 ### Type-level filterable attributes
 
@@ -82,6 +85,7 @@ A note can be pinned, independent of its type — `pinned: true` in frontmatter,
 | Thoughts | *(none)* |
 | Knowledge | *(none)* |
 | Draft | *(none)* |
+| Daily | *(none)* |
 
 ---
 
@@ -96,9 +100,21 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 │  Grouped by day with dividers             │
 │  Pinned section, always last              │
 ├──────────────────────────────────────────┤
+│  Daily status bar                         │
+├──────────────────────────────────────────┤
 │  Dock (command bar)                       │
 └──────────────────────────────────────────┘
 ```
+
+### Daily status bar
+
+A thin, persistent strip between the feed and the dock, always visible, giving at-a-glance color-coded feedback on today's logging activity (§5.8) — a light gamification nudge rather than another note-editing surface:
+
+- **Red** — nothing has been logged to today's daily note yet.
+- **Orange** — at least one item is logged, but the note's `mtime` is older than the configurable idle threshold (default 90 minutes, see §15).
+- **Green** — the note's `mtime` is within the idle threshold.
+
+It shows the count of items logged *today* alongside the color, and updates on a short timer even with no other activity in the view, so idle time alone can carry it from green to orange without requiring a refresh-triggering event.
 
 ### Order
 
@@ -265,6 +281,18 @@ Technical design of part of a project.
 - `status`: `exploring`, `in-review`, or `decided`. Filterable.
 - Badge color: dusty violet.
 
+### 5.8 Daily
+
+A single running log per calendar day of what got done — deliberately the lowest-friction type in the app, meant for quick capture rather than considered writing. Badge color: terracotta.
+
+- **No extra fields — and, uniquely, no `projects`/`teams` either** (see §2). The card never shows project/team pickers for a daily note, collapsed or expanded.
+- **Auto-created.** Opening the Logbook view ensures today's daily note exists, creating it silently (no navigation, no expanded card) if it doesn't. The note's identity is its calendar day, not a user-typed title: filename is `<YYYY-MM-DD>.md`, one per day, found by that deterministic path rather than the title-slug scheme every other type uses. A view left open across midnight still gets a fresh note the moment it's next due for one (see §15).
+- **`/daily [text]`** (§7) has two behaviors depending on whether text follows it:
+  - No text: opens today's daily note in Obsidian's editor (creating it first if needed) — without expanding its feed card, the same "jump to an existing note" pattern `/occurrence` already uses, rather than the force-expand behavior of the other creation commands.
+  - Some text: appends it to today's note as a checked list item (`- [x] <text>`) at the bottom of the body, and does **not** navigate to the note or expand its card — the point is to log something without breaking whatever the user is doing.
+- **Not part of "Change type."** A daily note can't be converted to another type, and no other type can be converted into daily — its date-keyed filename and lack of `projects`/`teams` don't fit the generic conversion machinery (§4).
+- **Status bar.** A persistent indicator at the very bottom of the view (below the feed, above the dock) reflects today's logging activity, purely off today's daily note — see §15.
+
 ---
 
 ## 6. Markdown support
@@ -303,6 +331,11 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 | `/knowledge [title]` | New knowledge note |
 | `/design [title]` | New design note |
 
+**`/daily [text]`** — unlike every command above, this doesn't create a titled note; it targets *today's* daily note (§5.8), auto-created if it doesn't exist yet, and behaves differently depending on whether text follows it:
+
+- No text: opens today's daily note in Obsidian's editor — without expanding its feed card or showing a "Writing a…" divider, since it isn't necessarily a new note.
+- Some text: appends it as a checked list item (`- [x] <text>`) to the bottom of today's note's body, and does nothing else — no navigation, no card expansion. This is the fast path: log something without leaving whatever you're doing.
+
 **`/occurrence [meeting]`** — adds today's occurrence to an *existing* recurring meeting, rather than creating a new note. Typing `/occurrence ` with nothing after it opens a dropdown listing every `type: recurring` note, latest-occurrence-first; typing further narrows it by fuzzy-matching titles, the same pattern used by `/project` and `/team`. Navigate with `↑`/`↓`, pick with `Tab` or `Enter`. On selecting one:
 
 - If a `## <today's ISO date>` heading already exists in that note (checked against its `occurrences[]` frontmatter, no need to open the file), nothing is inserted — the command just opens the note with the cursor on that existing heading. This avoids duplicate headings if the command is run twice in a day.
@@ -316,7 +349,7 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 | `/project [name]` | Filter by project; autocompletes from existing projects |
 | `/team [name]` | Filter by team; autocompletes from existing teams |
 | `/tag [name]` | Filter by Obsidian tag (frontmatter `tags` + inline `#tags`, read from the metadata cache); autocompletes from every tag in use across the logbook folder |
-| `/type [type]` | Filter by note type; autocompletes the seven types. Selecting a type with a sub-attribute (task/design → status, meeting → agenda) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
+| `/type [type]` | Filter by note type; autocompletes the eight types. Selecting a type with a sub-attribute (task/design → status, meeting → agenda) advances to a second step listing that attribute's values (plus "— all"); types without one apply immediately |
 | `/exclude [type]` | Hide a note type (and optionally a sub-attribute value), instead of restricting to it. Identical two-step flow to `/type` — same type list, same sub-attribute step — but the resulting filter is negated: matching notes are removed from the feed rather than being the only ones kept. `/exclude task done` hides only done tasks (other tasks, and every other type, stay visible); `/exclude task` with no sub-attribute hides all tasks. Independent of, and combinable with, `/type` and every other filter axis — all active filters still AND together (§8) |
 | `/view [name]` | Apply a saved view (see §8) — autocompletes from existing view names, same pattern as `/project`/`/team` |
 | `/saveview [name]` | Save the currently active filter combination as a new view under `name` (see §8), or overwrite an existing view of that name |
@@ -331,7 +364,7 @@ The dropdown fuzzy-matches by prefix as the user types. `Tab` selects the highli
 
 ### Command palette
 
-The seven creation commands (`/draft`, `/task`, `/meeting`, `/recurring`, `/thoughts`, `/knowledge`, `/design`) also exist as standalone entries in Obsidian's own command palette — `Logbook: New draft`, `Logbook: New task`, …, `Logbook: New recurring meeting` — reachable, and hotkey-bindable via Obsidian's own hotkey settings, from anywhere in the vault, not just while the Logbook view is open or focused. Picking one reveals the Logbook view (opening it first if it isn't already), then prefills the command bar with `/<type> ` and focuses it, ready to type a title — the exact same flow as picking that command from the bar's own dropdown, just reachable without the view already being in front of you.
+The eight creation commands (`/draft`, `/task`, `/meeting`, `/recurring`, `/thoughts`, `/knowledge`, `/design`, `/daily`) also exist as standalone entries in Obsidian's own command palette — `Logbook: New draft`, `Logbook: New task`, …, `Logbook: New daily` — reachable, and hotkey-bindable via Obsidian's own hotkey settings, from anywhere in the vault, not just while the Logbook view is open or focused. Picking one reveals the Logbook view (opening it first if it isn't already), then prefills the command bar with `/<type> ` and focuses it — for every type but daily this is ready to type a title, the exact same flow as picking that command from the bar's own dropdown; for daily, pressing `Enter` with nothing typed after the prefilled `/daily ` opens today's note instead (§5.8), since daily has no title to type.
 
 Filter commands (`/project`, `/team`, `/tag`, `/type`, `/view`, `/saveview`, `/clear`) and `/occurrence` are deliberately not mirrored in the command palette: they only do something useful once the feed they affect is already in view, so there's no benefit to firing them blind from elsewhere in the vault — unlike creation, which is a quick-capture action you'd want mid-thought, regardless of what note you're currently in.
 
@@ -411,7 +444,7 @@ A chevron action in the pane's title bar (added via `addAction`) toggles collaps
 
 ## 11. Theming
 
-The plugin has no theme of its own — it uses Obsidian's CSS variables throughout, so it automatically matches whatever theme (light, dark, or community) the user already has active. The only fixed colors are the per-type badge accents (gray/amber/dusty blue/teal/muted plum/moss green/dusty violet), chosen to read clearly against both light and dark Obsidian themes.
+The plugin has no theme of its own — it uses Obsidian's CSS variables throughout, so it automatically matches whatever theme (light, dark, or community) the user already has active. The only fixed colors are the per-type badge accents (gray/amber/dusty blue/teal/muted plum/moss green/dusty violet/terracotta) and the daily status bar's red/orange/green states (§3), chosen to read clearly against both light and dark Obsidian themes.
 
 ---
 
@@ -455,7 +488,8 @@ Inside any project/team input:
 
 ## 14. Quick visual vocabulary
 
-- **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), teal (recurring), muted plum (thoughts), moss green (knowledge), dusty violet (design).
+- **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), teal (recurring), muted plum (thoughts), moss green (knowledge), dusty violet (design), terracotta (daily).
+- **Daily status bar** — a thin strip below the feed, above the dock (§3); red/orange/green depending on whether, and how recently, something was logged to today's daily note.
 - **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `agenda` for meeting. Both filter when the card is collapsed and cycle/edit when expanded.
 - **Project chip** — briefcase icon + value, background-tinted; multiple per note.
 - **Team chip** — people icon + value, italicised; multiple per note.
@@ -482,7 +516,7 @@ A consistent rule: dots and icons prefix every chip so filter context is readabl
 - **Incremental feed rendering** — a refresh never tears down and rebuilds the whole card list. Each note's card is keyed by file path and cached; a render reuses a note's existing card DOM unchanged unless that note's own frontmatter/body/mtime actually differs from what's cached, and a card that's currently expanded is never rebuilt out from under the user regardless of what changed elsewhere — only dividers and the top-level ordering are recomputed each time. This means a write to one note (and the settle-triggered refresh ~600ms later) only ever touches that note's own card, not every card in the feed. The one exception: the relative-time pill's text is refreshed on every render pass even for a reused/cached card, since it's a function of wall-clock time rather than the note's own data — otherwise it would stay frozen at whatever it said ("now", say) the last time that card was actually rebuilt, even hours later.
 - **No custom sync** — notes are plain `.md` files in the vault; whatever sync the user already has (iCloud, Obsidian Sync, git) handles them.
 - **Trash, not delete** — destructive operations (draft/done-task auto-delete) use `app.vault.trash()`, respecting the vault's configured trash location rather than hard-deleting. Also display the MCP options (enable button and port).
-- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), one optional template-file path per note type (default `templates/<type>.md`) used to seed a new note's body on creation (see §7), the draft/done-task auto-delete TTLs in days (default 14 each, see §5.1/§5.2) — each measured from the note's mtime, and each independently disabled by leaving its field blank — and the list of saved views (see §8), each with a delete button.
+- **Settings tab** — exposes the configurable logbook folder path (default `logbook/`), one optional template-file path per note type (default `templates/<type>.md`) used to seed a new note's body on creation (see §7), the draft/done-task auto-delete TTLs in days (default 14 each, see §5.1/§5.2) — each measured from the note's mtime, and each independently disabled by leaving its field blank — the daily status bar's idle threshold in minutes (default 90, see §3, §5.8; unlike the TTLs above, not disableable, since the status bar always has a red/orange/green reading) — and the list of saved views (see §8), each with a delete button.
 - **Opens in the left sidebar by default** — the ribbon icon, the `Open Logbook` command, and every command-palette creation shortcut (see §7) all funnel through the same `activateView()`, which places a freshly-opened Logbook view in the left sidebar (falling back to a main-area tab only if the workspace has no left split at all) rather than a main-area tab, and reveals/reuses the existing view if one's already open anywhere in the workspace.
 - **Live refresh** — the feed re-renders on vault file events and metadata-cache updates, so external edits (other plugins, sync, direct file edits) are reflected without a manual reload.
 - **Icons** — project (briefcase) and team (people) pill icons use Obsidian's built-in `setIcon()` API against the Lucide icon set, the same mechanism the collapse-mode title-bar action already uses (see §10) — no custom inline SVG.
@@ -501,7 +535,7 @@ The server is a thin adapter over data the plugin already maintains — every to
 
 | Tool | Parameters | Returns |
 |---|---|---|
-| `list_note_types` | *(none)* | The static type catalog (§2): for each of the seven types, its `label`, `desc`, and — if it has one — its filterable attribute's key, label, and valid values (e.g. task → `status`: `todo`/`done`/`suspended`). Describes the schema only; independent of what's actually in the vault, so it works the same on an empty logbook as a full one. This is an agent's entrypoint — read this first to learn the vocabulary before querying. |
+| `list_note_types` | *(none)* | The static type catalog (§2): for each of the eight types, its `label`, `desc`, and — if it has one — its filterable attribute's key, label, and valid values (e.g. task → `status`: `todo`/`done`/`suspended`). Describes the schema only; independent of what's actually in the vault, so it works the same on an empty logbook as a full one. This is an agent's entrypoint — read this first to learn the vocabulary before querying. |
 | `list_projects` | *(none)* | Every distinct `projects[]` value in use, with a count of notes carrying it. |
 | `list_teams` | *(none)* | Every distinct `teams[]` value in use, with a count. |
 | `list_tags` | *(none)* | Every distinct tag in use (Obsidian's own tag system — frontmatter `tags` + inline `#tags`, see §9), with a count. |

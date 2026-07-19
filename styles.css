@@ -484,6 +484,30 @@
     display: none;
 }
 
+/* ── Daily status bar ────────────────────────────────────────────────────── */
+
+.logbook-status-bar {
+    padding: 6px 16px;
+    border-top: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.02em;
+}
+.logbook-status-bar.is-red {
+    color: var(--text-error);
+    background: color-mix(in srgb, var(--text-error) 10%, var(--background-primary));
+}
+.logbook-status-bar.is-orange {
+    color: var(--color-orange);
+    background: color-mix(in srgb, var(--color-orange) 10%, var(--background-primary));
+}
+.logbook-status-bar.is-green {
+    color: var(--color-green);
+    background: color-mix(in srgb, var(--color-green) 10%, var(--background-primary));
+}
+
 /* ── Dock ────────────────────────────────────────────────────────────────── */
 
 .logbook-dock {

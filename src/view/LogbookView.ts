@@ -3,7 +3,7 @@ import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
 import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_AGENDAS, activityTimestamp } from "../types";
 import { FilterState, applyFilters, emptyFilters, hasActiveFilters, filterSnapshot } from "../filters";
-import { generateId } from "../utils";
+import { countLoggedItems, generateId, relativeTime, todayISO } from "../utils";
 import { renderFeed, CardCache } from "./feed";
 import { CardContext } from "./card";
 import { Dock, RecurringMeetingRef } from "./dock";
@@ -15,6 +15,7 @@ const INITIAL_WINDOW_MONTHS = 1;
 export class LogbookView extends ItemView {
   private store: NoteStore;
   private feedEl!: HTMLElement;
+  private statusBarEl!: HTMLElement;
 
   private allNotes: LogNote[] = [];
   private filters: FilterState = emptyFilters();
@@ -56,6 +57,7 @@ export class LogbookView extends ItemView {
     contentEl.addClass("logbook-view");
 
     this.feedEl = contentEl.createDiv("logbook-feed");
+    this.statusBarEl = contentEl.createDiv("logbook-status-bar");
     const dockEl = contentEl.createDiv("logbook-dock");
     this.dock = new Dock(dockEl, {
       onSearch: (q) => {
@@ -64,6 +66,8 @@ export class LogbookView extends ItemView {
       },
       onCreate: (type, title) => void this.createAndShow(type, title),
       onCreateRecurring: (title) => void this.createAndShow("recurring", title),
+      onOpenDaily: () => void this.openDailyNote(),
+      onAppendDaily: (text) => void this.appendToDailyNote(text),
       onFilterProject: (name) => this.addFilterValue("projects", name),
       onFilterTeam: (name) => this.addFilterValue("teams", name),
       onFilterTag: (name) => this.addFilterValue("tags", name),
@@ -106,10 +110,22 @@ export class LogbookView extends ItemView {
     this.store.onSettled(() => void this.refresh());
 
     await this.store.pruneExpiredNotes();
+    await this.store.ensureDailyNote();
     await this.refresh();
     setTimeout(() => {
       this.feedEl.scrollTop = this.feedEl.scrollHeight;
     }, 80);
+
+    // Keeps the status bar's red/orange/green state current purely from the
+    // passage of time, and re-checks today's daily note exists — the only way
+    // to catch the view being left open across a midnight rollover, since
+    // onOpen() itself only runs once per leaf lifecycle.
+    this.registerInterval(
+      window.setInterval(() => {
+        void this.store.ensureDailyNote();
+        this.renderStatusBar();
+      }, 60_000)
+    );
   }
 
   private maybeRefresh() {
@@ -369,6 +385,59 @@ export class LogbookView extends ItemView {
       ctx,
       this.cardCache
     );
+    this.renderStatusBar();
+  }
+
+  private todaysDailyNote(): LogNote | undefined {
+    const today = todayISO();
+    return this.allNotes.find((n) => n.fm.type === "daily" && n.file.basename === today);
+  }
+
+  /** design.md §3, §5.8 — red (nothing logged today) / orange (idle past the
+   *  configured threshold) / green (logged within it), driven purely off
+   *  today's daily note's mtime and logged-item count. */
+  private renderStatusBar() {
+    const note = this.todaysDailyNote();
+    const count = note ? countLoggedItems(note.body) : 0;
+    this.statusBarEl.empty();
+    this.statusBarEl.removeClass("is-red", "is-orange", "is-green");
+
+    if (!note || count === 0) {
+      this.statusBarEl.addClass("is-red");
+      this.statusBarEl.createSpan({ text: "No tasks logged today" });
+      return;
+    }
+
+    const idleMs = this.settings.dailyIdleMinutes * 60_000;
+    const sinceMs = Date.now() - note.file.stat.mtime;
+    const plural = count === 1 ? "task" : "tasks";
+    if (sinceMs > idleMs) {
+      this.statusBarEl.addClass("is-orange");
+      this.statusBarEl.createSpan({
+        text: `${count} ${plural} logged today · idle since ${relativeTime(new Date(note.file.stat.mtime))}`,
+      });
+    } else {
+      this.statusBarEl.addClass("is-green");
+      this.statusBarEl.createSpan({
+        text: `${count} ${plural} logged today · last ${relativeTime(new Date(note.file.stat.mtime))}`,
+      });
+    }
+  }
+
+  /** /daily with no text (design.md §7) — jumps to today's note without
+   *  force-expanding its feed card, mirroring handleOccurrence()'s "open an
+   *  existing/just-ensured note" pattern rather than createAndShow()'s. */
+  private async openDailyNote() {
+    const file = await this.store.ensureDailyNote();
+    await this.refresh();
+    await this.app.workspace.openLinkText(file.path, "", false);
+  }
+
+  /** /daily <text> (design.md §7) — appends a logged item without navigating
+   *  to the note or expanding its card. */
+  private async appendToDailyNote(text: string) {
+    const file = await this.store.ensureDailyNote();
+    await this.store.appendDailyItem(file, text);
   }
 
   private async loadMoreHistory() {
