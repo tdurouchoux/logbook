@@ -116,6 +116,8 @@ A persistent toast-style card between the feed and the dock, always visible — 
 
 It shows the count of items logged *today* alongside the color, and updates on a short timer even with no other activity in the view, so idle time alone can carry it from green to orange — and a midnight rollover alone can carry it back to red, once today's note is yesterday's — without requiring a refresh-triggering event.
 
+**Pop animation.** Another light gamification touch: the card briefly pops (a quick scale-up-and-settle) whenever a new item lands on today's note — specifically when the logged-item count has *increased* since the view last checked, not on every re-render (a timer tick, an unrelated refresh) and not the moment a new day's note is first seen. Respects `prefers-reduced-motion`.
+
 ### Order
 
 - Chronological, newest at the bottom. The view scrolls to the bottom on open.
@@ -290,7 +292,7 @@ A single running log per calendar day of what got done — deliberately the lowe
 - **Created only by `/daily`.** Nothing creates today's note automatically — opening the Logbook view doesn't, and neither does idle time passing. Either form of `/daily` (below) creates it on demand if it doesn't exist yet. The note's identity is its calendar day, not a user-typed title: filename is `<YYYY-MM-DD>.md`, one per day, found by that deterministic path rather than the title-slug scheme every other type uses.
 - **`/daily [text]`** (§7) has two behaviors depending on whether text follows it:
   - No text: opens today's daily note in Obsidian's editor (creating it first if needed) — without expanding its feed card, the same "jump to an existing note" pattern `/occurrence` already uses, rather than the force-expand behavior of the other creation commands.
-  - Some text: appends it to today's note as a checked list item (`- [x] <text>`) at the bottom of the body, and does **not** navigate to the note or expand its card — the point is to log something without breaking whatever the user is doing.
+  - Some text: appends it to today's note as a plain list item (`- <text>`) at the bottom of the body, and does **not** navigate to the note or expand its card — the point is to log something without breaking whatever the user is doing.
 - **Not part of "Change type."** A daily note can't be converted to another type, and no other type can be converted into daily — its date-keyed filename and lack of `projects`/`teams` don't fit the generic conversion machinery (§4).
 - **Status bar.** A persistent indicator at the very bottom of the view (below the feed, above the dock) reflects today's logging activity, purely off today's daily note — see §15.
 
@@ -336,7 +338,7 @@ Typing a leading `/` into the (always-visible) command bar switches it into comm
 **`/daily [text]`** — unlike every command above, this doesn't create a titled note; it targets *today's* daily note (§5.8), auto-created if it doesn't exist yet, and behaves differently depending on whether text follows it:
 
 - No text: opens today's daily note in Obsidian's editor — without expanding its feed card or showing a "Writing a…" divider, since it isn't necessarily a new note.
-- Some text: appends it as a checked list item (`- [x] <text>`) to the bottom of today's note's body, and does nothing else — no navigation, no card expansion. This is the fast path: log something without leaving whatever you're doing.
+- Some text: appends it as a plain list item (`- <text>`) to the bottom of today's note's body, and does nothing else — no navigation, no card expansion. This is the fast path: log something without leaving whatever you're doing.
 
 **`/occurrence [meeting]`** — adds today's occurrence to an *existing* recurring meeting, rather than creating a new note. Typing `/occurrence ` with nothing after it opens a dropdown listing every `type: recurring` note, latest-occurrence-first; typing further narrows it by fuzzy-matching titles, the same pattern used by `/project` and `/team`. Navigate with `↑`/`↓`, pick with `Tab` or `Enter`. On selecting one:
 

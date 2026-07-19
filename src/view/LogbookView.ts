@@ -16,6 +16,12 @@ export class LogbookView extends ItemView {
   private store: NoteStore;
   private feedEl!: HTMLElement;
   private statusBarEl!: HTMLElement;
+  /** Tracks the last-seen (path, logged-item count) for today's daily note,
+   *  purely so renderStatusBar() can tell "a new item just landed" apart from
+   *  any other reason it re-rendered (a timer tick, an unrelated refresh) and
+   *  trigger the status bar's pop animation only for the former. */
+  private lastDailyPath: string | undefined;
+  private lastDailyCount: number | undefined;
 
   private allNotes: LogNote[] = [];
   private filters: FilterState = emptyFilters();
@@ -424,6 +430,27 @@ export class LogbookView extends ItemView {
     this.statusBarEl.addClass(`is-${state}`);
     this.statusBarEl.createSpan({ cls: "logbook-status-icon", text: icon });
     this.statusBarEl.createSpan({ cls: "logbook-status-msg", text });
+
+    // Pop the card when a new item has landed on today's note since the last
+    // check — not on every re-render (a timer tick, an unrelated refresh) and
+    // not the first time a note's seen (path just changed to a fresh day).
+    const path = note?.file.path;
+    const justLogged =
+      path !== undefined &&
+      path === this.lastDailyPath &&
+      this.lastDailyCount !== undefined &&
+      count > this.lastDailyCount;
+    this.lastDailyPath = path;
+    this.lastDailyCount = count;
+
+    if (justLogged) {
+      this.statusBarEl.removeClass("is-pop");
+      void this.statusBarEl.offsetWidth; // force reflow so the animation restarts if triggered again quickly
+      this.statusBarEl.addClass("is-pop");
+      this.statusBarEl.addEventListener("animationend", () => this.statusBarEl.removeClass("is-pop"), {
+        once: true,
+      });
+    }
   }
 
   /** /daily with no text (design.md §7) — jumps to today's note without

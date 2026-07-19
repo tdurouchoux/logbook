@@ -181,3 +181,16 @@ Two user-requested follow-ups to Phase 34's daily notes, `design.md` §3, §5.8,
 `tsc -noEmit -skipLibCheck` + `node esbuild.config.mjs production` clean from the repo root.
 
 Manual QA in a live vault is still outstanding for this phase: confirming the status bar reads red with no daily note created yet (view freshly opened, nothing auto-created), that `/daily` (either form) creates it and the bar responds correctly, the toast card's shadow/rounding/left-edge render as intended against both an Obsidian dark and light theme, and that a midnight rollover with the view left open turns the bar red again within a minute rather than requiring a reload.
+
+Follow-up fix, same phase: the card had no bottom margin, so its shadow butted directly against the dock's `border-top`, reading as a stray line snapped under a floating card. Gave `.logbook-status-bar` symmetric top/bottom margin and dropped `.logbook-dock`'s `border-top` entirely — redundant now that the card's own shadow does the separating, and the status bar is always present so the dock is never directly adjacent to the feed anymore.
+
+## Status: done — Phase 37 (pop animation; daily log items back to plain bullets)
+
+Two more user-requested follow-ups, `design.md` §3, §5.8, §7 updated accordingly:
+
+- **Pop animation.** A first small step toward "more gamified" (discussed a few options — streak counter, scaling emoji, micro-animation — user picked the cheapest, purely-cosmetic one to try first). `LogbookView.ts` gained `lastDailyPath`/`lastDailyCount` fields so `renderStatusBar()` can tell "a new item just landed" apart from any other reason it re-rendered (a timer tick, an unrelated refresh) — it only pops when the count has *increased* since the last check **and** the note's path is unchanged (so the transition into a fresh day's note, or the very first render, never triggers it). Fires by removing then re-adding an `is-pop` class (forcing a reflow in between so the animation restarts even if triggered again quickly), cleaned up via a one-shot `animationend` listener. `styles.css` added `@keyframes logbook-status-pop` (a quick scale-up-and-settle, `cubic-bezier(0.34, 1.56, 0.64, 1)` for a little overshoot) and a `prefers-reduced-motion` override that disables it.
+- **Plain list items, not checkboxes.** Reverts part of Phase 34's choice: `note-store.ts`'s `appendDailyLine()` now writes `- <text>` instead of `- [x] <text>`. `countLoggedItems()` (`utils.ts`) needed no change — its `/^\s*-\s+\S/` line-matcher already matched both formats generically.
+
+`tsc -noEmit -skipLibCheck` + `node esbuild.config.mjs production` clean from the repo root.
+
+Manual QA in a live vault is still outstanding for this phase: confirming the pop actually fires on `/daily <text>` and not on the 60s timer tick or an unrelated vault refresh, that it doesn't fire on the first log of a new day, and that newly-appended items render as plain bullets rather than checkboxes.

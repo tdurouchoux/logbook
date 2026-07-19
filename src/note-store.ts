@@ -191,7 +191,7 @@ export class NoteStore {
     return this.app.vault.getAbstractFileByPath(path) as TFile;
   }
 
-  /** design.md §7 /daily <text> — appends a checked list item to today's daily
+  /** design.md §7 /daily <text> — appends a plain list item to today's daily
    *  note's body. Uses the same atomic vault.process() primitive as occurrence
    *  headings; no frontmatter to keep in sync, so no updateFrontmatter call. */
   async appendDailyItem(file: TFile, text: string): Promise<void> {
@@ -354,7 +354,7 @@ function insertOccurrenceHeading(content: string, isoDate: string): string {
   return head + heading + trimmedBody;
 }
 
-/** Appends a checked list item at the bottom of the body (design.md §7 /daily),
+/** Appends a plain list item at the bottom of the body (design.md §7 /daily),
  *  matching the app's newest-at-the-bottom convention. */
 function appendDailyLine(content: string, text: string): string {
   const end = content.indexOf("\n---\n");
@@ -362,6 +362,6 @@ function appendDailyLine(content: string, text: string): string {
   const head = content.slice(0, fmEnd);
   const body = content.slice(fmEnd);
   const trimmed = body.replace(/\s+$/, "");
-  const line = `- [x] ${text.trim().replace(/\s*\n\s*/g, " ")}`;
+  const line = `- ${text.trim().replace(/\s*\n\s*/g, " ")}`;
   return head + (trimmed ? `${trimmed}\n${line}\n` : `${line}\n`);
 }
