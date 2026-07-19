@@ -110,22 +110,16 @@ export class LogbookView extends ItemView {
     this.store.onSettled(() => void this.refresh());
 
     await this.store.pruneExpiredNotes();
-    await this.store.ensureDailyNote();
     await this.refresh();
     setTimeout(() => {
       this.feedEl.scrollTop = this.feedEl.scrollHeight;
     }, 80);
 
     // Keeps the status bar's red/orange/green state current purely from the
-    // passage of time, and re-checks today's daily note exists — the only way
-    // to catch the view being left open across a midnight rollover, since
-    // onOpen() itself only runs once per leaf lifecycle.
-    this.registerInterval(
-      window.setInterval(() => {
-        void this.store.ensureDailyNote();
-        this.renderStatusBar();
-      }, 60_000)
-    );
+    // passage of time — including falling back to red once a midnight
+    // rollover means todaysDailyNote() no longer finds a match, since
+    // nothing here creates one; only /daily itself does that.
+    this.registerInterval(window.setInterval(() => this.renderStatusBar(), 60_000));
   }
 
   private maybeRefresh() {
@@ -393,18 +387,19 @@ export class LogbookView extends ItemView {
     return this.allNotes.find((n) => n.fm.type === "daily" && n.file.basename === today);
   }
 
-  /** design.md §3, §5.8 — red (nothing logged today) / orange (idle past the
-   *  configured threshold) / green (logged within it), driven purely off
-   *  today's daily note's mtime and logged-item count. */
+  /** design.md §3, §5.8 — red (no daily note exists yet today) / orange (idle
+   *  past the configured threshold) / green (logged within it), driven purely
+   *  off today's daily note's mtime and logged-item count. Nothing here ever
+   *  creates the note — only /daily does that. */
   private renderStatusBar() {
     const note = this.todaysDailyNote();
     const count = note ? countLoggedItems(note.body) : 0;
     this.statusBarEl.empty();
     this.statusBarEl.removeClass("is-red", "is-orange", "is-green");
 
-    if (!note || count === 0) {
+    if (!note) {
       this.statusBarEl.addClass("is-red");
-      this.statusBarEl.createSpan({ text: "No tasks logged today" });
+      this.statusBarEl.createSpan({ text: "No daily note yet — try /daily" });
       return;
     }
 
