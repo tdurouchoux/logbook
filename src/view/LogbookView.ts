@@ -203,6 +203,11 @@ export class LogbookView extends ItemView {
     this.dock.runCommand(key);
   }
 
+  /** Backing the global "Focus Logbook input" command (main.ts). */
+  focusDockInput() {
+    this.dock.focus();
+  }
+
   private addFilterValue(key: "projects" | "teams" | "tags", value: string) {
     if (!this.filters[key].includes(value)) this.filters[key] = [...this.filters[key], value];
     this.afterFilterChange();

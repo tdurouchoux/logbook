@@ -295,6 +295,12 @@ export class Dock {
     this.pickCommand(key);
   }
 
+  /** Entry point for the global "Focus Logbook input" command (main.ts) — focuses
+   *  the bar as-is, ready to type, without prefilling a command. */
+  focus() {
+    this.inputEl.focus();
+  }
+
   private showPickList(query: string, pool: string[], onPick: (v: string) => void) {
     const matches = pool.filter((p) => fuzzyMatch(query, p));
     this.items = matches.map((m) => ({

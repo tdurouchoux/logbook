@@ -575,9 +575,9 @@
         box-shadow 0.15s;
 }
 .logbook-input:focus {
-    border-color: var(--interactive-accent);
+    border-color: var(--color-purple, var(--interactive-accent));
     box-shadow: 0 0 0 3px
-        color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+        color-mix(in srgb, var(--color-purple, var(--interactive-accent)) 16%, transparent);
 }
 .logbook-input::placeholder {
     color: var(--text-faint);

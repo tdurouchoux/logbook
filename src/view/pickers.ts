@@ -124,6 +124,12 @@ export function renderPicker(container: HTMLElement, opts: PickerOptions) {
         e.preventDefault();
         e.stopPropagation();
         await addValue(filtered[suggestIdx] ?? input.value);
+      } else if (e.key === "Tab" && filtered.length) {
+        // Only hijack Tab when there's a highlighted suggestion to accept;
+        // otherwise let it move focus normally (e.g. out of an empty input).
+        e.preventDefault();
+        e.stopPropagation();
+        await addValue(filtered[suggestIdx]);
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         suggestIdx = Math.min(suggestIdx + 1, filtered.length - 1);
