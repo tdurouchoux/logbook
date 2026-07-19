@@ -16,11 +16,9 @@ export class LogbookView extends ItemView {
   private store: NoteStore;
   private feedEl!: HTMLElement;
   private statusBarEl!: HTMLElement;
-  /** Tracks the last-seen (path, logged-item count) for today's daily note,
-   *  purely so renderStatusBar() can tell "a new item just landed" apart from
-   *  any other reason it re-rendered (a timer tick, an unrelated refresh) and
-   *  trigger the status bar's pop animation only for the former. */
-  private lastDailyPath: string | undefined;
+  /** Last-seen logged-item count for today's daily note (no note ⇒ 0), purely
+   *  so renderStatusBar() can tell "a new item just landed" apart from any
+   *  other reason it re-rendered and trigger the pop animation only for that. */
   private lastDailyCount: number | undefined;
 
   private allNotes: LogNote[] = [];
@@ -431,16 +429,14 @@ export class LogbookView extends ItemView {
     this.statusBarEl.createSpan({ cls: "logbook-status-icon", text: icon });
     this.statusBarEl.createSpan({ cls: "logbook-status-msg", text });
 
-    // Pop the card when a new item has landed on today's note since the last
-    // check — not on every re-render (a timer tick, an unrelated refresh) and
-    // not the first time a note's seen (path just changed to a fresh day).
-    const path = note?.file.path;
-    const justLogged =
-      path !== undefined &&
-      path === this.lastDailyPath &&
-      this.lastDailyCount !== undefined &&
-      count > this.lastDailyCount;
-    this.lastDailyPath = path;
+    // Pop the card whenever the logged-item count has gone up since the last
+    // check — not on every re-render (a timer tick, an unrelated refresh).
+    // Comparing counts alone (no note ⇒ 0) is what makes the very first item
+    // of the day — going from no note at all to one with 1 item — animate
+    // too, same as any other increase. The only case excluded is the very
+    // first call ever (lastDailyCount still undefined, i.e. the view just
+    // opened) — nothing "just landed" then, whatever state we find.
+    const justLogged = this.lastDailyCount !== undefined && count > this.lastDailyCount;
     this.lastDailyCount = count;
 
     if (justLogged) {
