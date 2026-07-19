@@ -394,29 +394,36 @@ export class LogbookView extends ItemView {
   private renderStatusBar() {
     const note = this.todaysDailyNote();
     const count = note ? countLoggedItems(note.body) : 0;
-    this.statusBarEl.empty();
-    this.statusBarEl.removeClass("is-red", "is-orange", "is-green");
+
+    let state: "red" | "orange" | "green";
+    let icon: string;
+    let text: string;
 
     if (!note) {
-      this.statusBarEl.addClass("is-red");
-      this.statusBarEl.createSpan({ text: "No daily note yet — try /daily" });
-      return;
+      state = "red";
+      icon = "🌱";
+      text = "No daily note yet — try /daily";
+    } else {
+      const idleMs = this.settings.dailyIdleMinutes * 60_000;
+      const sinceMs = Date.now() - note.file.stat.mtime;
+      const plural = count === 1 ? "task" : "tasks";
+      const last = relativeTime(new Date(note.file.stat.mtime));
+      if (sinceMs > idleMs) {
+        state = "orange";
+        icon = "⏳";
+        text = `${count} ${plural} logged today · idle since ${last}`;
+      } else {
+        state = "green";
+        icon = "🔥";
+        text = `${count} ${plural} logged today · last ${last}`;
+      }
     }
 
-    const idleMs = this.settings.dailyIdleMinutes * 60_000;
-    const sinceMs = Date.now() - note.file.stat.mtime;
-    const plural = count === 1 ? "task" : "tasks";
-    if (sinceMs > idleMs) {
-      this.statusBarEl.addClass("is-orange");
-      this.statusBarEl.createSpan({
-        text: `${count} ${plural} logged today · idle since ${relativeTime(new Date(note.file.stat.mtime))}`,
-      });
-    } else {
-      this.statusBarEl.addClass("is-green");
-      this.statusBarEl.createSpan({
-        text: `${count} ${plural} logged today · last ${relativeTime(new Date(note.file.stat.mtime))}`,
-      });
-    }
+    this.statusBarEl.empty();
+    this.statusBarEl.removeClass("is-red", "is-orange", "is-green");
+    this.statusBarEl.addClass(`is-${state}`);
+    this.statusBarEl.createSpan({ cls: "logbook-status-icon", text: icon });
+    this.statusBarEl.createSpan({ cls: "logbook-status-msg", text });
   }
 
   /** /daily with no text (design.md §7) — jumps to today's note without

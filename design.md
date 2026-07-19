@@ -108,13 +108,13 @@ The plugin registers an `ItemView` tab in the main workspace area. Its width is 
 
 ### Daily status bar
 
-A thin, persistent strip between the feed and the dock, always visible, giving at-a-glance color-coded feedback on today's logging activity (§5.8) — a light gamification nudge rather than another note-editing surface:
+A persistent toast-style card between the feed and the dock, always visible — inset from the edges, rounded, its own soft shadow and a colored left edge, floating on top of the dock rather than flattened into it — giving at-a-glance feedback on today's logging activity (§5.8) via a colored left edge, a small state-tinted icon circle with an emoji, and a short message. A light gamification nudge rather than another note-editing surface:
 
-- **Red** — nothing has been logged to today's daily note yet.
-- **Orange** — at least one item is logged, but the note's `mtime` is older than the configurable idle threshold (default 90 minutes, see §15).
-- **Green** — the note's `mtime` is within the idle threshold.
+- **Red, 🌱** — no daily note exists for today yet. Nothing creates one automatically (§5.8) — the card is inviting the user to run `/daily`.
+- **Orange, ⏳** — today's note exists and has at least one item logged, but its `mtime` is older than the configurable idle threshold (default 90 minutes, see §15).
+- **Green, 🔥** — today's note exists and its `mtime` is within the idle threshold (this also covers a note that was just created but has nothing logged in it yet — existing at all is enough to leave red).
 
-It shows the count of items logged *today* alongside the color, and updates on a short timer even with no other activity in the view, so idle time alone can carry it from green to orange without requiring a refresh-triggering event.
+It shows the count of items logged *today* alongside the color, and updates on a short timer even with no other activity in the view, so idle time alone can carry it from green to orange — and a midnight rollover alone can carry it back to red, once today's note is yesterday's — without requiring a refresh-triggering event.
 
 ### Order
 
@@ -287,7 +287,7 @@ Technical design of part of a project.
 A single running log per calendar day of what got done — deliberately the lowest-friction type in the app, meant for quick capture rather than considered writing. Badge color: terracotta.
 
 - **No extra fields — and, uniquely, no `projects`/`teams` either** (see §2). The card never shows project/team pickers for a daily note, collapsed or expanded.
-- **Auto-created.** Opening the Logbook view ensures today's daily note exists, creating it silently (no navigation, no expanded card) if it doesn't. The note's identity is its calendar day, not a user-typed title: filename is `<YYYY-MM-DD>.md`, one per day, found by that deterministic path rather than the title-slug scheme every other type uses. A view left open across midnight still gets a fresh note the moment it's next due for one (see §15).
+- **Created only by `/daily`.** Nothing creates today's note automatically — opening the Logbook view doesn't, and neither does idle time passing. Either form of `/daily` (below) creates it on demand if it doesn't exist yet. The note's identity is its calendar day, not a user-typed title: filename is `<YYYY-MM-DD>.md`, one per day, found by that deterministic path rather than the title-slug scheme every other type uses.
 - **`/daily [text]`** (§7) has two behaviors depending on whether text follows it:
   - No text: opens today's daily note in Obsidian's editor (creating it first if needed) — without expanding its feed card, the same "jump to an existing note" pattern `/occurrence` already uses, rather than the force-expand behavior of the other creation commands.
   - Some text: appends it to today's note as a checked list item (`- [x] <text>`) at the bottom of the body, and does **not** navigate to the note or expand its card — the point is to log something without breaking whatever the user is doing.
@@ -491,7 +491,7 @@ Inside any project/team input:
 ## 14. Quick visual vocabulary
 
 - **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), teal (recurring), muted plum (thoughts), moss green (knowledge), dusty violet (design), terracotta (daily).
-- **Daily status bar** — a thin strip below the feed, above the dock (§3); red/orange/green depending on whether, and how recently, something was logged to today's daily note.
+- **Daily status bar** — a floating toast card below the feed, above the dock (§3); red 🌱/orange ⏳/green 🔥 depending on whether today's daily note exists and, if so, how recently something was logged to it.
 - **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `agenda` for meeting. Both filter when the card is collapsed and cycle/edit when expanded.
 - **Project chip** — briefcase icon + value, background-tinted; multiple per note.
 - **Team chip** — people icon + value, italicised; multiple per note.

@@ -484,28 +484,44 @@
     display: none;
 }
 
-/* ── Daily status bar ────────────────────────────────────────────────────── */
+/* ── Daily status bar (toast card, design.md §3) ────────────────────────── */
 
 .logbook-status-bar {
-    padding: 6px 16px;
-    border-top: 1px solid var(--background-modifier-border);
-    background: var(--background-primary);
+    margin: 8px 16px 0;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: var(--background-secondary);
+    border-left: 3px solid var(--state);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+.logbook-status-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 12px;
-    font-weight: 600;
-    text-align: center;
-    letter-spacing: 0.02em;
+    background: color-mix(in srgb, var(--state) 22%, var(--background-secondary));
+}
+.logbook-status-msg {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-normal);
+    line-height: 1.35;
 }
 .logbook-status-bar.is-red {
-    color: var(--text-error);
-    background: color-mix(in srgb, var(--text-error) 10%, var(--background-primary));
+    --state: var(--text-error);
 }
 .logbook-status-bar.is-orange {
-    color: var(--color-orange);
-    background: color-mix(in srgb, var(--color-orange) 10%, var(--background-primary));
+    --state: var(--color-orange);
 }
 .logbook-status-bar.is-green {
-    color: var(--color-green);
-    background: color-mix(in srgb, var(--color-green) 10%, var(--background-primary));
+    --state: var(--color-green);
 }
 
 /* ── Dock ────────────────────────────────────────────────────────────────── */
