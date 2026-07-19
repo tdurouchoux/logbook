@@ -196,3 +196,15 @@ Two more user-requested follow-ups, `design.md` §3, §5.8, §7 updated accordin
 Follow-up fix, same phase: the first version also required the note's *path* to match the previous check, meant to skip animating on a fresh day's first-ever render — but since "no note" and "a note exists" are different paths (`undefined` vs. a real string), that same guard silently blocked the 0→1 transition too, i.e. the single most rewarding moment (the day's very first log) never popped. Dropped the path comparison entirely — count alone (no note ⇒ 0) already captures every case correctly, including 0→1, without it.
 
 Manual QA in a live vault is still outstanding for this phase: confirming the pop actually fires on `/daily <text>` and not on the 60s timer tick or an unrelated vault refresh, that it doesn't fire on the first log of a new day, and that newly-appended items render as plain bullets rather than checkboxes.
+
+## Status: done — Phase 38 (timestamp each `/daily` entry)
+
+`design.md` §5.8, §7 now document this. Each logged item now records when it was logged, not just what: `- <HH:MM> · <text>` instead of `- <text>`.
+
+- **`utils.ts`** — new `formatClockTime(d)`, local 24-hour `HH:MM` via manual `padStart` (matching `todayISO()`'s existing style — deterministic, no locale ambiguity — rather than `toLocaleTimeString`, which is reserved elsewhere for human-facing display strings like `formatDailyTitle`).
+- **`note-store.ts`** — `appendDailyItem(file, text)` captures `formatClockTime(new Date())` once before the atomic `vault.process()` call and passes it through; `appendDailyLine(content, text, time)` gained the `time` parameter and now writes `- ${time} · ${text}`, reusing `·` as the separator to match the status bar's existing copy convention (`"3 tasks logged today · idle since 1h"`).
+- **No changes** to `countLoggedItems()` (`utils.ts`) — its `/^\s*-\s+\S/` line-matcher already matches the timestamped format unchanged.
+
+`tsc -noEmit -skipLibCheck` + `node esbuild.config.mjs production` clean from the repo root.
+
+Manual QA in a live vault is still outstanding for this phase: confirming logged items actually carry an accurate local time and that the status bar's count is unaffected.

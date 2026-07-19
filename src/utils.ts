@@ -110,6 +110,11 @@ export function formatDailyTitle(d: Date): string {
   return d.toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
 
+/** 24-hour local clock time, e.g. "14:32" — prefixes each /daily log entry. */
+export function formatClockTime(d: Date): string {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 /** Counts logged list items in a daily note's body (design.md §3's status bar). */
 export function countLoggedItems(body: string): number {
   return body.split("\n").filter((l) => /^\s*-\s+\S/.test(l)).length;

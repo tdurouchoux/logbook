@@ -5,7 +5,7 @@ import {
   NoteType,
   RecurringFrontmatter,
 } from "./types";
-import { formatDailyTitle, generateId, sanitizeFilename, todayISO } from "./utils";
+import { formatClockTime, formatDailyTitle, generateId, sanitizeFilename, todayISO } from "./utils";
 import { LogbookSettings } from "./settings";
 
 /**
@@ -191,11 +191,13 @@ export class NoteStore {
     return this.app.vault.getAbstractFileByPath(path) as TFile;
   }
 
-  /** design.md §7 /daily <text> — appends a plain list item to today's daily
-   *  note's body. Uses the same atomic vault.process() primitive as occurrence
-   *  headings; no frontmatter to keep in sync, so no updateFrontmatter call. */
+  /** design.md §7 /daily <text> — appends a plain, timestamped list item to
+   *  today's daily note's body. Uses the same atomic vault.process() primitive
+   *  as occurrence headings; no frontmatter to keep in sync, so no
+   *  updateFrontmatter call. */
   async appendDailyItem(file: TFile, text: string): Promise<void> {
-    await this.app.vault.process(file, (content) => appendDailyLine(content, text));
+    const time = formatClockTime(new Date());
+    await this.app.vault.process(file, (content) => appendDailyLine(content, text, time));
   }
 
   async createRecurringMeeting(title: string): Promise<TFile> {
@@ -354,14 +356,14 @@ function insertOccurrenceHeading(content: string, isoDate: string): string {
   return head + heading + trimmedBody;
 }
 
-/** Appends a plain list item at the bottom of the body (design.md §7 /daily),
- *  matching the app's newest-at-the-bottom convention. */
-function appendDailyLine(content: string, text: string): string {
+/** Appends a plain, timestamped list item at the bottom of the body
+ *  (design.md §7 /daily), matching the app's newest-at-the-bottom convention. */
+function appendDailyLine(content: string, text: string, time: string): string {
   const end = content.indexOf("\n---\n");
   const fmEnd = content.startsWith("---") && end >= 0 ? end + 5 : 0;
   const head = content.slice(0, fmEnd);
   const body = content.slice(fmEnd);
   const trimmed = body.replace(/\s+$/, "");
-  const line = `- ${text.trim().replace(/\s*\n\s*/g, " ")}`;
+  const line = `- ${time} · ${text.trim().replace(/\s*\n\s*/g, " ")}`;
   return head + (trimmed ? `${trimmed}\n${line}\n` : `${line}\n`);
 }
