@@ -487,7 +487,7 @@
 /* ── Daily status bar (toast card, design.md §3) ────────────────────────── */
 
 .logbook-status-bar {
-    margin: 8px 16px 0;
+    margin: 8px 16px;
     padding: 9px 12px;
     border-radius: 9px;
     background: var(--background-secondary);
@@ -529,7 +529,6 @@
 .logbook-dock {
     position: relative; /* anchor for the dropdown */
     padding: 10px 16px 14px;
-    border-top: 1px solid var(--background-modifier-border);
     background: var(--background-primary);
 }
 
