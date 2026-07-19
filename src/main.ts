@@ -26,6 +26,7 @@ export default class LogbookPlugin extends Plugin {
     this.addCommand({
       id: "focus-logbook-input",
       name: "Focus Logbook input",
+      hotkeys: [{ modifiers: ["Mod"], key: "k" }],
       callback: async () => {
         const view = await this.activateView();
         view.focusDockInput();
