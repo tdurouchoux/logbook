@@ -16,7 +16,7 @@ import {
 } from "../types";
 import { NoteStore } from "../note-store";
 import { relativeTime, formatDeadline, isPastDeadline } from "../utils";
-import { fuzzyMatchRanges, substringMatchRanges } from "../filters";
+import { fuzzyMatchRanges, substringMatchRanges, matchStrength } from "../filters";
 import { renderPicker } from "./pickers";
 
 export interface CardContext {
@@ -144,6 +144,17 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="6 9 12 15 18 9"/></svg>`;
+
+  if (ctx.searchQuery) {
+    const strength = matchStrength(note, ctx.searchQuery);
+    if (strength) {
+      const label = strength === "strong" ? "Matched in title/projects/teams" : "Matched in body only";
+      top.createEl("span", {
+        cls: `logbook-match-dot is-${strength}`,
+        attr: { "aria-label": label, title: label },
+      });
+    }
+  }
 
   top.createEl("span", { cls: "logbook-time", text: relativeTime(new Date(note.file.stat.mtime)) });
 

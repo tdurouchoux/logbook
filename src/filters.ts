@@ -118,6 +118,21 @@ function matchesQuery(note: LogNote, terms: QueryTerm[]): boolean {
   return terms.every(({ text, fuzzy }) => !!fuzzy(shortHaystack) || body.includes(text));
 }
 
+export type MatchStrength = "strong" | "weak";
+
+/** Since search never reorders the feed (design.md §7), this is the signal a card
+ *  uses to show relevance in place instead: "strong" when every query term is found
+ *  in the short, filename-like fields (title/projects/teams/type fields) — a hit
+ *  visible at a glance — vs. "weak" when at least one term only turned up via body's
+ *  substring pass, meaning the relevance is buried in the note text. `null` when
+ *  there's no active query to grade against. */
+export function matchStrength(note: LogNote, query: string): MatchStrength | null {
+  const terms = prepareQueryTerms(query);
+  if (!terms.length) return null;
+  const shortHaystack = shortFieldsOf(note).join(" \n ");
+  return terms.every(({ fuzzy }) => !!fuzzy(shortHaystack)) ? "strong" : "weak";
+}
+
 function matchesTypeAttr(note: LogNote, attr: TypeAttrFilter): boolean {
   const fm: any = note.fm;
   const value = fm[attr.key];
