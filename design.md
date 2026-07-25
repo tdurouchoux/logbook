@@ -116,6 +116,8 @@ A persistent toast-style card between the feed and the dock, always visible — 
 
 It shows the count of items logged *today* alongside the color, and updates on a short timer even with no other activity in the view, so idle time alone can carry it from green to orange — and a midnight rollover alone can carry it back to red, once today's note is yesterday's — without requiring a refresh-triggering event.
 
+The whole card is clickable — same "jump to today's note" flow as `/daily` with no text (§5.8, §7), ensuring the note first if it doesn't exist yet (turning a click on the red state into the same one-click creation `/daily` gives it).
+
 **Pop animation.** Another light gamification touch: the card briefly pops (a quick scale-up-and-settle) whenever a new item lands on today's note — specifically when the logged-item count has *increased* since the view last checked, not on every re-render (a timer tick, an unrelated refresh) and not the moment a new day's note is first seen. Respects `prefers-reduced-motion`.
 
 ### Order
@@ -312,9 +314,10 @@ A single input at the bottom of the view, with two modes.
 
 ### Search mode (default)
 
-- Free text is a search query: each whitespace-separated term is fuzzy-matched (typo-tolerant, out-of-order-character-tolerant — Obsidian's own `prepareFuzzySearch`, the same matcher behind its quick switcher) independently, and all terms must match (AND) somewhere across `title`, `body`, `projects`, `teams`, and every type-specific field, treated as one combined haystack per note. It does not match tags — free-text tag search is still Obsidian's own search/tag pane's job; the plugin's only tag-aware affordance is the dedicated `/tag` filter command (see §9). A fuzzy match is filter-only: it doesn't change the feed's sort order, which stays the same chronological/day-grouped order described in §3 regardless of which notes a query lets through.
-- **Submitted on `Enter`, not applied live** — typing into the bar doesn't filter the feed as you type; the query only takes effect once `Enter` is pressed (see §12), same as the rest of the bar's Enter-driven flows. This also means the previous query keeps filtering the feed while you're mid-edit of a new one, rather than the feed flickering through every intermediate keystroke.
-- Matches are highlighted (see §6) in card previews while the query is active.
+- Free text is a search query: each whitespace-separated term must match (AND) via one of two per-note passes. Against the short, filename-like fields — `title`, `projects`, `teams`, and every type-specific field (status, deadline, agenda, theme, attendees, techStack), treated as one combined haystack — a term matches if it's fuzzy-matched (typo-tolerant, out-of-order-character-tolerant — Obsidian's own `prepareFuzzySearch`, the same matcher behind its quick switcher). Against `body`, a term instead matches via plain case-insensitive substring — fuzzy subsequence matching isn't a good fit for paragraph-length text: a short term's characters are almost always found *somewhere* in order across that much text, so it degenerates to near-universal false positives. A term counts as matched for the note if either pass matches. It does not match tags — free-text tag search is still Obsidian's own search/tag pane's job; the plugin's only tag-aware affordance is the dedicated `/tag` filter command (see §9). A match is filter-only: it doesn't change the feed's sort order, which stays the same chronological/day-grouped order described in §3 regardless of which notes a query lets through.
+- **Submitted on `Enter`, not applied live, and stackable** — typing into the bar doesn't filter the feed as you type; a query only takes effect once `Enter` is pressed (see §12), same as the rest of the bar's Enter-driven flows. Submitting moves it into its own chip above the bar and clears the input, exactly like `/project`/`/team`/etc — the bar is then free to take another filter, including another free-text query. Multiple query chips AND together (each one's own terms already AND internally, per the paragraph above), same as multi-select axes like projects/teams. This also means the previously-submitted queries keep filtering the feed while you're mid-edit of a new one, rather than the feed flickering through every intermediate keystroke.
+- Matches are highlighted (see §6) in card previews while any query is active.
+- **Relevance dot** — since a match never reorders the feed, each matching card shows a small dot next to its timestamp instead, as an in-place "look here first" cue: filled/accent when every query term matched via the short-fields pass (title/projects/teams/type fields — visible at a glance), faint when at least one term only matched via `body`'s substring pass (relevance buried in the note text). Shown in both the regular card list and collapse mode.
 - When filters are active, the bar shows their chips to the left of the input (see §8).
 - Free text never creates a note, on `Enter` or otherwise — note creation only happens through `/` commands.
 
@@ -378,7 +381,7 @@ Filter commands (`/project`, `/team`, `/tag`, `/type`, `/view`, `/saveview`, `/c
 
 A filter narrows what the feed shows; all active filters AND together. Filter axes:
 
-- Free-text query (search)
+- Free-text search queries (multi-select — each submitted query becomes its own chip, AND'd with the rest, see §7)
 - Projects (multi-select)
 - Teams (multi-select)
 - Tags (multi-select) — read-only filter over Obsidian's own tags, via `/tag` (see §9)
@@ -389,12 +392,12 @@ A filter narrows what the feed shows; all active filters AND together. Filter ax
 
 ### Filter chips
 
-Active filters appear as chips inside the command bar, to the left of the input: a briefcase-icon chip for projects, a people-icon chip for teams, a plain chip for tags, a colored-dot pill for type, and an "exclude type"-labeled chip for an active `/exclude` filter. Each chip is removable via its own × or by clicking it.
+Active filters appear as chips inside the command bar, to the left of the input: a plain "search"-labeled chip per submitted free-text query, a briefcase-icon chip for projects, a people-icon chip for teams, a plain chip for tags, a colored-dot pill for type, and an "exclude type"-labeled chip for an active `/exclude` filter. Each chip is removable via its own × or by clicking it.
 
 ### Removing filters
 
 - Click the × on a chip.
-- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: project → team → tag → exclude-type attribute → exclude type → type → type attribute.
+- Press `Backspace` in the command bar while the input is empty — removes the most recent filter, in priority order: query → project → team → tag → exclude-type attribute → exclude type → type → type attribute.
 - Run `/clear`.
 
 ### Clicking things
@@ -410,10 +413,10 @@ This is the primary way users discover filtering — no query syntax to learn, j
 
 ### Saved views
 
-A **view** is a named, saved combination of the filter axes above — everything except the free-text query, which stays a per-session search rather than part of a saved combination:
+A **view** is a named, saved combination of the filter axes above — everything except free-text search queries, which stay a per-session search rather than part of a saved combination:
 
 - **`/saveview <name>`** (see §7) snapshots the currently active projects/teams/tags/type/type-attribute/excludeType/excludeType-attribute under `name`. Saving under a name that already exists overwrites that view.
-- **`/view <name>`** (see §7) applies a saved view's filters on top of whatever free-text query is currently in the bar — it replaces every filter axis a view captures, but never touches the query.
+- **`/view <name>`** (see §7) applies a saved view's filters on top of whatever search queries are currently stacked in the bar — it replaces every filter axis a view captures, but never touches the queries.
 - Views are plugin-level configuration, not vault content — they're stored in the plugin's own settings (alongside the logbook folder path, templates, and TTLs, see §15), not written to any note's frontmatter.
 - Managed from the settings tab: each saved view is listed with a delete button. There's no rename — delete and re-save under a new name instead.
 
@@ -493,7 +496,7 @@ Inside any project/team input:
 ## 14. Quick visual vocabulary
 
 - **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), teal (recurring), muted plum (thoughts), moss green (knowledge), dusty violet (design), terracotta (daily).
-- **Daily status bar** — a floating toast card below the feed, above the dock (§3); red 🌱/orange ⏳/green 🔥 depending on whether today's daily note exists and, if so, how recently something was logged to it.
+- **Daily status bar** — a floating toast card below the feed, above the dock (§3); red 🌱/orange ⏳/green 🔥 depending on whether today's daily note exists and, if so, how recently something was logged to it; clicking it jumps to (ensuring first, if needed) today's daily note, same as `/daily` with no text.
 - **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `agenda` for meeting. Both filter when the card is collapsed and cycle/edit when expanded.
 - **Project chip** — briefcase icon + value, background-tinted; multiple per note.
 - **Team chip** — people icon + value, italicised; multiple per note.

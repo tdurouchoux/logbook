@@ -16,7 +16,7 @@ import {
 } from "../types";
 import { NoteStore } from "../note-store";
 import { relativeTime, formatDeadline, isPastDeadline } from "../utils";
-import { fuzzyMatchRanges } from "../filters";
+import { fuzzyMatchRanges, substringMatchRanges, matchStrength } from "../filters";
 import { renderPicker } from "./pickers";
 
 export interface CardContext {
@@ -145,6 +145,17 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="6 9 12 15 18 9"/></svg>`;
 
+  if (ctx.searchQuery) {
+    const strength = matchStrength(note, ctx.searchQuery);
+    if (strength) {
+      const label = strength === "strong" ? "Matched in title/projects/teams" : "Matched in body only";
+      top.createEl("span", {
+        cls: `logbook-match-dot is-${strength}`,
+        attr: { "aria-label": label, title: label },
+      });
+    }
+  }
+
   top.createEl("span", { cls: "logbook-time", text: relativeTime(new Date(note.file.stat.mtime)) });
 
   // ── Commit / discard ────────────────────────────────────────────────────
@@ -215,7 +226,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     const plain = note.body.replace(/^#{1,4}\s+/gm, "").replace(/[*_`>#]/g, "").slice(0, 160);
     const preview = previewWrap.createEl("div", { cls: "logbook-preview" });
     if (ctx.searchQuery) {
-      renderMatches(preview, plain, fuzzyMatchRanges(plain, ctx.searchQuery));
+      renderMatches(preview, plain, substringMatchRanges(plain, ctx.searchQuery));
     } else {
       preview.textContent = plain;
     }

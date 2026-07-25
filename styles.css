@@ -114,6 +114,25 @@
     flex-shrink: 0;
 }
 
+/* Search relevance cue (design.md §7): search never reorders the feed, so this
+   marks match quality in place instead — filled accent dot when every query term
+   is found in the short fields (title/projects/teams/type fields), faint dot when
+   at least one term only turned up in the body. */
+.logbook-match-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+.logbook-match-dot.is-strong {
+    background: var(--interactive-accent);
+}
+.logbook-match-dot.is-weak {
+    background: var(--text-faint);
+    opacity: 0.55;
+}
+
 .logbook-title {
     font-size: 15px;
     font-weight: 600;
@@ -496,6 +515,10 @@
     display: flex;
     align-items: center;
     gap: 9px;
+    cursor: pointer;
+}
+.logbook-status-bar:hover {
+    background: var(--background-secondary-alt);
 }
 .logbook-status-icon {
     width: 22px;

@@ -124,7 +124,7 @@ export class LogbookMcpServer {
           projects: projects ?? [],
           teams: teams ?? [],
           tags: tags ?? [],
-          query: query ?? "",
+          queries: query ? [query] : [],
           typeAttr: typeAttr ?? null,
         };
         const matched = applyFilters(notes, filters).sort(

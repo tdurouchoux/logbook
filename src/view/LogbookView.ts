@@ -2,7 +2,7 @@ import { ItemView, MarkdownView, Notice, TAbstractFile, TFile, WorkspaceLeaf } f
 import { LogbookSettings } from "../settings";
 import { NoteStore } from "../note-store";
 import { LogNote, NOTE_TYPES, NoteType, TASK_STATUSES, DESIGN_STATUSES, MEETING_AGENDAS, activityTimestamp } from "../types";
-import { FilterState, applyFilters, emptyFilters, hasActiveFilters, filterSnapshot } from "../filters";
+import { FilterState, applyFilters, emptyFilters, hasActiveFilters, filterSnapshot, combinedQuery } from "../filters";
 import { countLoggedItems, generateId, relativeTime, todayISO } from "../utils";
 import { renderFeed, CardCache } from "./feed";
 import { CardContext } from "./card";
@@ -62,12 +62,14 @@ export class LogbookView extends ItemView {
 
     this.feedEl = contentEl.createDiv("logbook-feed");
     this.statusBarEl = contentEl.createDiv("logbook-status-bar");
+    this.statusBarEl.setAttribute("aria-label", "Open today's daily note");
+    // Same "jump to today's note" flow as /daily with no text — renderStatusBar()
+    // fully re-empties this element's children on every render, but the element
+    // itself persists across renders, so the listener is only ever attached once.
+    this.statusBarEl.addEventListener("click", () => void this.openDailyNote());
     const dockEl = contentEl.createDiv("logbook-dock");
     this.dock = new Dock(dockEl, {
-      onSearch: (q) => {
-        this.filters.query = q;
-        this.renderDisplay();
-      },
+      onSearch: (q) => this.addFilterValue("queries", q),
       onCreate: (type, title) => void this.createAndShow(type, title),
       onCreateRecurring: (title) => void this.createAndShow("recurring", title),
       onOpenDaily: () => void this.openDailyNote(),
@@ -208,16 +210,17 @@ export class LogbookView extends ItemView {
     this.dock.focus();
   }
 
-  private addFilterValue(key: "projects" | "teams" | "tags", value: string) {
+  private addFilterValue(key: "queries" | "projects" | "teams" | "tags", value: string) {
     if (!this.filters[key].includes(value)) this.filters[key] = [...this.filters[key], value];
     this.afterFilterChange();
   }
 
   private removeFilterChip(
-    kind: "project" | "team" | "tag" | "type" | "typeAttr" | "excludeType" | "excludeTypeAttr",
+    kind: "query" | "project" | "team" | "tag" | "type" | "typeAttr" | "excludeType" | "excludeTypeAttr",
     value?: string
   ) {
-    if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
+    if (kind === "query") this.filters.queries = this.filters.queries.filter((v) => v !== value);
+    else if (kind === "project") this.filters.projects = this.filters.projects.filter((v) => v !== value);
     else if (kind === "team") this.filters.teams = this.filters.teams.filter((v) => v !== value);
     else if (kind === "tag") this.filters.tags = this.filters.tags.filter((v) => v !== value);
     else if (kind === "type") {
@@ -236,8 +239,9 @@ export class LogbookView extends ItemView {
     this.renderDisplay();
   }
 
-  /** /view <name> — applies a saved filter combination on top of the current
-   *  search query, which a view deliberately doesn't capture (see filterSnapshot). */
+  /** /view <name> — applies a saved filter combination on top of whatever search
+   *  queries are currently stacked, which a view deliberately doesn't capture
+   *  (see filterSnapshot). */
   private applyView(name: string) {
     const view = this.settings.views.find((v) => v.name === name);
     if (!view) return;
@@ -362,7 +366,7 @@ export class LogbookView extends ItemView {
         projects: () => this.collectPool((n) => n.fm.projects),
         teams: () => this.collectPool((n) => n.fm.teams),
       },
-      searchQuery: this.filters.query,
+      searchQuery: combinedQuery(this.filters.queries),
       onFilterProject: (p) => this.addFilterValue("projects", p),
       onFilterTeam: (t) => this.addFilterValue("teams", t),
       onFilterType: (type, attr) => {
