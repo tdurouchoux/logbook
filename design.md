@@ -116,6 +116,8 @@ A persistent toast-style card between the feed and the dock, always visible — 
 
 It shows the count of items logged *today* alongside the color, and updates on a short timer even with no other activity in the view, so idle time alone can carry it from green to orange — and a midnight rollover alone can carry it back to red, once today's note is yesterday's — without requiring a refresh-triggering event.
 
+The whole card is clickable — same "jump to today's note" flow as `/daily` with no text (§5.8, §7), ensuring the note first if it doesn't exist yet (turning a click on the red state into the same one-click creation `/daily` gives it).
+
 **Pop animation.** Another light gamification touch: the card briefly pops (a quick scale-up-and-settle) whenever a new item lands on today's note — specifically when the logged-item count has *increased* since the view last checked, not on every re-render (a timer tick, an unrelated refresh) and not the moment a new day's note is first seen. Respects `prefers-reduced-motion`.
 
 ### Order
@@ -494,7 +496,7 @@ Inside any project/team input:
 ## 14. Quick visual vocabulary
 
 - **Type badge** — colored dot + uppercase label. gray (draft), amber (task), dusty blue (meeting), teal (recurring), muted plum (thoughts), moss green (knowledge), dusty violet (design), terracotta (daily).
-- **Daily status bar** — a floating toast card below the feed, above the dock (§3); red 🌱/orange ⏳/green 🔥 depending on whether today's daily note exists and, if so, how recently something was logged to it.
+- **Daily status bar** — a floating toast card below the feed, above the dock (§3); red 🌱/orange ⏳/green 🔥 depending on whether today's daily note exists and, if so, how recently something was logged to it; clicking it jumps to (ensuring first, if needed) today's daily note, same as `/daily` with no text.
 - **Filterable-property pill** — a type's extra filterable attribute (see §2): `status` for task/design, `agenda` for meeting. Both filter when the card is collapsed and cycle/edit when expanded.
 - **Project chip** — briefcase icon + value, background-tinted; multiple per note.
 - **Team chip** — people icon + value, italicised; multiple per note.

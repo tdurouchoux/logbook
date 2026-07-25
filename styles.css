@@ -515,6 +515,10 @@
     display: flex;
     align-items: center;
     gap: 9px;
+    cursor: pointer;
+}
+.logbook-status-bar:hover {
+    background: var(--background-secondary-alt);
 }
 .logbook-status-icon {
     width: 22px;

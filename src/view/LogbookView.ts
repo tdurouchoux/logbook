@@ -62,6 +62,11 @@ export class LogbookView extends ItemView {
 
     this.feedEl = contentEl.createDiv("logbook-feed");
     this.statusBarEl = contentEl.createDiv("logbook-status-bar");
+    this.statusBarEl.setAttribute("aria-label", "Open today's daily note");
+    // Same "jump to today's note" flow as /daily with no text — renderStatusBar()
+    // fully re-empties this element's children on every render, but the element
+    // itself persists across renders, so the listener is only ever attached once.
+    this.statusBarEl.addEventListener("click", () => void this.openDailyNote());
     const dockEl = contentEl.createDiv("logbook-dock");
     this.dock = new Dock(dockEl, {
       onSearch: (q) => this.addFilterValue("queries", q),
