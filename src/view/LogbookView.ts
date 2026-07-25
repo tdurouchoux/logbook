@@ -12,6 +12,9 @@ export const VIEW_TYPE_LOGBOOK = "logbook-feed";
 
 const INITIAL_WINDOW_MONTHS = 1;
 
+/** Quiet period a burst of vault events has to clear before the feed reloads. */
+const REFRESH_DEBOUNCE_MS = 300;
+
 export class LogbookView extends ItemView {
   private store: NoteStore;
   private feedEl!: HTMLElement;
@@ -33,6 +36,7 @@ export class LogbookView extends ItemView {
   private cardCache: CardCache = new Map();
   private pendingDivider: string | undefined;
   private pendingNotePath: string | undefined;
+  private refreshTimer: number | null = null;
 
   private dock!: Dock;
 
@@ -108,11 +112,11 @@ export class LogbookView extends ItemView {
       contentEl.toggleClass("is-collapse-mode", !contentEl.hasClass("is-collapse-mode"));
     });
 
-    this.registerEvent(this.app.vault.on("create", () => this.maybeRefresh()));
-    this.registerEvent(this.app.vault.on("modify", () => this.maybeRefresh()));
-    this.registerEvent(this.app.vault.on("delete", () => this.maybeRefresh()));
+    this.registerEvent(this.app.vault.on("create", (file) => this.maybeRefresh(file)));
+    this.registerEvent(this.app.vault.on("modify", (file) => this.maybeRefresh(file)));
+    this.registerEvent(this.app.vault.on("delete", (file) => this.maybeRefresh(file)));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => void this.handleRename(file, oldPath)));
-    this.registerEvent(this.app.metadataCache.on("changed", () => this.maybeRefresh()));
+    this.registerEvent(this.app.metadataCache.on("changed", (file) => this.maybeRefresh(file)));
     this.store.onSettled(() => void this.refresh());
 
     await this.store.pruneExpiredNotes();
@@ -128,9 +132,42 @@ export class LogbookView extends ItemView {
     this.registerInterval(window.setInterval(() => this.renderStatusBar(), 60_000));
   }
 
-  private maybeRefresh() {
-    if (this.store.isAnySuppressed()) return;
-    void this.refresh();
+  async onClose() {
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
+  }
+
+  /** Whether `path` is the logbook folder itself or something inside it. */
+  private inLogbook(path: string): boolean {
+    return path === this.store.folder || path.startsWith(this.store.folder + "/");
+  }
+
+  /** Vault and metadata-cache events fire for the whole vault, but only activity
+   *  inside the logbook folder can change the feed — everything else is dropped
+   *  here rather than costing a full folder reload (design.md §15). */
+  private maybeRefresh(file: TAbstractFile) {
+    if (!this.inLogbook(file.path)) return;
+    this.scheduleRefresh();
+  }
+
+  /** Coalesces a burst of events into a single reload. A single edit fires both
+   *  vault "modify" and metadataCache "changed", and a sync pulling in many files
+   *  fires one event per file — undebounced, each of those is its own full reload
+   *  of the whole logbook folder.
+   *
+   *  The suppression check deliberately runs when the timer fires rather than when
+   *  it's scheduled: our own writes' events land inside the store's 600ms
+   *  suppression window, and dropping them at schedule time would swallow the
+   *  refresh outright instead of deferring it past the window. */
+  private scheduleRefresh() {
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = null;
+      if (this.store.isAnySuppressed()) {
+        this.scheduleRefresh();
+        return;
+      }
+      void this.refresh();
+    }, REFRESH_DEBOUNCE_MS);
   }
 
   private async refresh() {
@@ -147,12 +184,32 @@ export class LogbookView extends ItemView {
    *  Skipped when the rename came from our own renameTitle() (the card's title
    *  field), which already wrote the literal typed title itself. */
   private async handleRename(file: TAbstractFile, oldPath: string) {
-    if (!(file instanceof TFile) || !file.path.startsWith(this.store.folder + "/")) return;
+    const cameFrom = this.inLogbook(oldPath);
+    const goesTo = this.inLogbook(file.path);
+    if (!cameFrom && !goesTo) return;
+
+    // A folder moved into or out of the logbook changes which notes the feed
+    // contains, but carries no per-note state to fix up.
+    if (!(file instanceof TFile)) {
+      this.scheduleRefresh();
+      return;
+    }
 
     if (this.expandedPath === oldPath) this.expandedPath = file.path;
     if (this.pendingNotePath === oldPath) this.pendingNotePath = file.path;
     this.cardCache.delete(oldPath);
 
+    // Moved *out* of the logbook: there's no frontmatter to write (the note is no
+    // longer ours), but the feed still holds a card for it. No vault "delete" fires
+    // for a rename, and the scoped listeners above no longer see this file at all —
+    // so without an explicit refresh the stale card would never go away.
+    if (!goesTo) {
+      this.scheduleRefresh();
+      return;
+    }
+
+    // Our own renameTitle() already wrote the typed title and its write will
+    // trigger the store's onSettled refresh, so there's nothing to do here.
     if (this.store.consumeSelfRename(file.path)) return;
     await this.store.updateFrontmatter(file, (fm) => {
       fm.title = file.basename;
