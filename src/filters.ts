@@ -7,7 +7,10 @@ export interface TypeAttrFilter {
 }
 
 export interface FilterState {
-  query: string;
+  /** Stacked free-text search queries — like `projects`/`teams`, each submitted
+   *  query becomes its own chip and all of them AND together (on top of the
+   *  per-query AND-across-terms matching in `matchesQuery`). */
+  queries: string[];
   projects: string[];
   teams: string[];
   tags: string[];
@@ -18,8 +21,8 @@ export interface FilterState {
 }
 
 /** The subset of FilterState a saved view captures — everything but free-text
- *  query, which stays a per-session search rather than part of a filter combo. */
-export type SavedViewFilters = Omit<FilterState, "query">;
+ *  queries, which stay a per-session search rather than part of a filter combo. */
+export type SavedViewFilters = Omit<FilterState, "queries">;
 
 export interface SavedView {
   id: string;
@@ -42,7 +45,7 @@ export function filterSnapshot(f: FilterState): SavedViewFilters {
 
 export function emptyFilters(): FilterState {
   return {
-    query: "",
+    queries: [],
     projects: [],
     teams: [],
     tags: [],
@@ -55,7 +58,7 @@ export function emptyFilters(): FilterState {
 
 export function hasActiveFilters(f: FilterState): boolean {
   return (
-    !!f.query ||
+    f.queries.length > 0 ||
     f.projects.length > 0 ||
     f.teams.length > 0 ||
     f.tags.length > 0 ||
@@ -140,8 +143,16 @@ function matchesTypeAttr(note: LogNote, attr: TypeAttrFilter): boolean {
   return value === attr.value;
 }
 
+/** Stacked queries AND together the same way terms within a single query do — so
+ *  concatenating them into one term list is equivalent, and lets every query-aware
+ *  helper (`matchesQuery`, `matchStrength`, the highlight-range functions) stay
+ *  written in terms of a single query string. */
+export function combinedQuery(queries: string[]): string {
+  return queries.join(" ");
+}
+
 export function applyFilters(notes: LogNote[], filters: FilterState): LogNote[] {
-  const queryTerms = prepareQueryTerms(filters.query);
+  const queryTerms = prepareQueryTerms(combinedQuery(filters.queries));
   return notes.filter((n) => {
     if (filters.type && n.fm.type !== filters.type) return false;
     if (filters.typeAttr && !matchesTypeAttr(n, filters.typeAttr)) return false;

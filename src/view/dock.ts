@@ -21,7 +21,7 @@ export interface DockCallbacks {
   onClearFilters(): void;
   onOccurrence(meeting: RecurringMeetingRef): void;
   onRemoveFilterChip(
-    kind: "project" | "team" | "tag" | "type" | "typeAttr" | "excludeType" | "excludeTypeAttr",
+    kind: "query" | "project" | "team" | "tag" | "type" | "typeAttr" | "excludeType" | "excludeTypeAttr",
     value?: string
   ): void;
   onApplyView(name: string): void;
@@ -84,6 +84,9 @@ export class Dock {
   renderChips() {
     this.chipsEl.empty();
     const f = this.cb.getFilters();
+    for (const q of f.queries) {
+      this.addChip("search", q, () => this.cb.onRemoveFilterChip("query", q));
+    }
     for (const p of f.projects) {
       this.addChip("project", p, () => this.cb.onRemoveFilterChip("project", p));
     }
@@ -437,6 +440,10 @@ export class Dock {
 
   private removeMostRecentFilter(): boolean {
     const f = this.cb.getFilters();
+    if (f.queries.length) {
+      this.cb.onRemoveFilterChip("query", f.queries[f.queries.length - 1]);
+      return true;
+    }
     if (f.projects.length) {
       this.cb.onRemoveFilterChip("project", f.projects[f.projects.length - 1]);
       return true;
@@ -474,8 +481,13 @@ export class Dock {
     if (!val.startsWith("/")) {
       // Plain text is always a search query, submitted only on Enter (no live
       // updates while typing) — it never creates a note (design.md §7); note
-      // creation only happens through `/` commands.
-      this.cb.onSearch(val);
+      // creation only happens through `/` commands. Submitting moves it into its
+      // own chip, same as /project etc, so more filters (including another
+      // query) can stack on top of it.
+      if (val) {
+        this.cb.onSearch(val);
+        this.resetInput();
+      }
       return;
     }
 
