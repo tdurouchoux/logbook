@@ -16,7 +16,7 @@ import {
 } from "../types";
 import { NoteStore } from "../note-store";
 import { relativeTime, formatDeadline, isPastDeadline } from "../utils";
-import { fuzzyMatchRanges } from "../filters";
+import { fuzzyMatchRanges, substringMatchRanges } from "../filters";
 import { renderPicker } from "./pickers";
 
 export interface CardContext {
@@ -215,7 +215,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     const plain = note.body.replace(/^#{1,4}\s+/gm, "").replace(/[*_`>#]/g, "").slice(0, 160);
     const preview = previewWrap.createEl("div", { cls: "logbook-preview" });
     if (ctx.searchQuery) {
-      renderMatches(preview, plain, fuzzyMatchRanges(plain, ctx.searchQuery));
+      renderMatches(preview, plain, substringMatchRanges(plain, ctx.searchQuery));
     } else {
       preview.textContent = plain;
     }

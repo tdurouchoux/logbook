@@ -66,9 +66,16 @@ export function hasActiveFilters(f: FilterState): boolean {
   );
 }
 
-function fieldsOf(note: LogNote): string[] {
+/** Short, filename-like fields — title, projects/teams, and type-specific tags/status
+ *  — where Obsidian's subsequence fuzzy matcher (typo-tolerant, same as the quick
+ *  switcher) stays a good fit. `body` is deliberately excluded: fuzzy subsequence
+ *  matching over paragraph-length text has a near-100% false-positive rate, since a
+ *  short term's letters are almost always found *somewhere* in order across that much
+ *  text — see plan.md. Body gets plain substring matching instead, same as Obsidian's
+ *  own full-text search pane. */
+function shortFieldsOf(note: LogNote): string[] {
   const fm: any = note.fm;
-  const fields = [fm.title, note.body, ...(fm.projects ?? []), ...(fm.teams ?? [])];
+  const fields = [fm.title, ...(fm.projects ?? []), ...(fm.teams ?? [])];
   switch (fm.type) {
     case "task":
       fields.push(fm.status, fm.deadline);
@@ -89,19 +96,26 @@ function fieldsOf(note: LogNote): string[] {
   return fields.filter((v): v is string => typeof v === "string");
 }
 
-/** One prepared fuzzy matcher per query term, built once per `applyFilters` call
- *  rather than per note — `prepareFuzzySearch` only needs to parse the term once. */
-function prepareQueryMatchers(query: string): Array<(text: string) => unknown> {
+interface QueryTerm {
+  /** Lowercased, for plain substring matching against `body`. */
+  text: string;
+  /** Prepared once per `applyFilters` call rather than per note — `prepareFuzzySearch`
+   *  only needs to parse the term once. */
+  fuzzy: (text: string) => unknown;
+}
+
+function prepareQueryTerms(query: string): QueryTerm[] {
   return query
     .split(/\s+/)
     .filter(Boolean)
-    .map((term) => prepareFuzzySearch(term));
+    .map((term) => ({ text: term.toLowerCase(), fuzzy: prepareFuzzySearch(term) }));
 }
 
-function matchesQuery(note: LogNote, matchers: Array<(text: string) => unknown>): boolean {
-  if (!matchers.length) return true;
-  const haystack = fieldsOf(note).join(" \n ");
-  return matchers.every((m) => !!m(haystack));
+function matchesQuery(note: LogNote, terms: QueryTerm[]): boolean {
+  if (!terms.length) return true;
+  const shortHaystack = shortFieldsOf(note).join(" \n ");
+  const body = note.body.toLowerCase();
+  return terms.every(({ text, fuzzy }) => !!fuzzy(shortHaystack) || body.includes(text));
 }
 
 function matchesTypeAttr(note: LogNote, attr: TypeAttrFilter): boolean {
@@ -112,7 +126,7 @@ function matchesTypeAttr(note: LogNote, attr: TypeAttrFilter): boolean {
 }
 
 export function applyFilters(notes: LogNote[], filters: FilterState): LogNote[] {
-  const queryMatchers = prepareQueryMatchers(filters.query);
+  const queryTerms = prepareQueryTerms(filters.query);
   return notes.filter((n) => {
     if (filters.type && n.fm.type !== filters.type) return false;
     if (filters.typeAttr && !matchesTypeAttr(n, filters.typeAttr)) return false;
@@ -122,21 +136,13 @@ export function applyFilters(notes: LogNote[], filters: FilterState): LogNote[] 
     if (filters.projects.length && !filters.projects.every((p) => n.fm.projects.includes(p))) return false;
     if (filters.teams.length && !filters.teams.every((t) => n.fm.teams.includes(t))) return false;
     if (filters.tags.length && !filters.tags.every((t) => n.tags.includes(t))) return false;
-    if (!matchesQuery(n, queryMatchers)) return false;
+    if (!matchesQuery(n, queryTerms)) return false;
     return true;
   });
 }
 
-/** Per-term fuzzy match ranges within `text`, merged and sorted for `renderMatches`
- *  (design.md §6) — each query term is matched independently since terms can land
- *  in different, non-adjacent parts of the text. */
-export function fuzzyMatchRanges(text: string, query: string): SearchMatches {
-  const terms = query.split(/\s+/).filter(Boolean);
-  const ranges: SearchMatches = [];
-  for (const term of terms) {
-    const result = prepareFuzzySearch(term)(text);
-    if (result) ranges.push(...result.matches);
-  }
+/** Sorts and merges overlapping/adjacent ranges for `renderMatches` (design.md §6). */
+function mergeRanges(ranges: SearchMatches): SearchMatches {
   ranges.sort((a, b) => a[0] - b[0]);
   const merged: SearchMatches = [];
   for (const [start, end] of ranges) {
@@ -148,4 +154,33 @@ export function fuzzyMatchRanges(text: string, query: string): SearchMatches {
     }
   }
   return merged;
+}
+
+/** Per-term fuzzy match ranges within `text` — for short fields (title) matched via
+ *  `prepareFuzzySearch`, same as `matchesQuery`'s short-field pass. */
+export function fuzzyMatchRanges(text: string, query: string): SearchMatches {
+  const terms = query.split(/\s+/).filter(Boolean);
+  const ranges: SearchMatches = [];
+  for (const term of terms) {
+    const result = prepareFuzzySearch(term)(text);
+    if (result) ranges.push(...result.matches);
+  }
+  return mergeRanges(ranges);
+}
+
+/** Per-term plain substring match ranges within `text` — for `body`, matched via
+ *  case-insensitive substring rather than fuzzy subsequence (see `shortFieldsOf`). */
+export function substringMatchRanges(text: string, query: string): SearchMatches {
+  const terms = query.split(/\s+/).filter(Boolean).map((t) => t.toLowerCase());
+  const lower = text.toLowerCase();
+  const ranges: SearchMatches = [];
+  for (const term of terms) {
+    let from = 0;
+    let idx: number;
+    while ((idx = lower.indexOf(term, from)) !== -1) {
+      ranges.push([idx, idx + term.length]);
+      from = idx + term.length;
+    }
+  }
+  return mergeRanges(ranges);
 }
