@@ -1,4 +1,4 @@
-import { LogNote } from "./types";
+import { LogNote, localDateFromISO } from "./types";
 
 /** Cleans a title into a valid filename while keeping it human-readable — only strips
  *  what Obsidian actually disallows in a note title (`* " \ / < > : | ?`, since the
@@ -37,7 +37,15 @@ function startOfWeek(d: Date): Date {
   return out;
 }
 
-/** Day-group label per design.md §3: Today / Yesterday / weekday / "Wed, May 14" / "May 14, 2024". */
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+/** Day-group label per design.md §3: exact-day labels (Today / Yesterday / weekday
+ *  name) for anything within the current calendar week; coarser relative buckets
+ *  ("Last week", "Last month", "N months ago", "N years ago", …) beyond that, so a
+ *  note's exact date is never shown once it's more than a week old, and the feed
+ *  doesn't grow one divider per calendar day forever as history gets deeper. */
 export function dayLabel(d: Date, now: Date = new Date()): string {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
@@ -47,13 +55,24 @@ export function dayLabel(d: Date, now: Date = new Date()): string {
   if (sameDay(d, today)) return "Today";
   if (sameDay(d, yesterday)) return "Yesterday";
 
-  if (d >= startOfWeek(today) && d <= today) {
-    return d.toLocaleDateString("en", { weekday: "long" });
-  }
-  if (d.getFullYear() === today.getFullYear()) {
-    return d.toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" });
-  }
-  return d.toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" });
+  const thisWeekStart = startOfWeek(today);
+  if (d >= thisWeekStart) return d.toLocaleDateString("en", { weekday: "long" });
+
+  const lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  if (d >= lastWeekStart) return "Last week";
+
+  const thisMonthStart = startOfMonth(today);
+  if (d >= thisMonthStart) return "Earlier this month";
+
+  const lastMonthStart = startOfMonth(new Date(thisMonthStart.getFullYear(), thisMonthStart.getMonth() - 1, 1));
+  if (d >= lastMonthStart) return "Last month";
+
+  const monthsAgo = (today.getFullYear() - d.getFullYear()) * 12 + (today.getMonth() - d.getMonth());
+  if (monthsAgo < 12) return `${monthsAgo} months ago`;
+
+  const yearsAgo = Math.floor(monthsAgo / 12);
+  return yearsAgo === 1 ? "Last year" : `${yearsAgo} years ago`;
 }
 
 export function groupByDay(notes: LogNote[], tsOf: (n: LogNote) => number): [string, LogNote[]][] {
@@ -74,6 +93,31 @@ export function relativeTime(date: Date): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h`;
   return date.toLocaleDateString("en", { day: "numeric", month: "short" });
+}
+
+export function formatDeadline(iso: string): string {
+  return localDateFromISO(iso).toLocaleDateString("en", { month: "short", day: "numeric" });
+}
+
+export function isPastDeadline(iso: string): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return localDateFromISO(iso).getTime() < today.getTime();
+}
+
+/** A daily note's frontmatter title, e.g. "Sunday, July 19, 2026". */
+export function formatDailyTitle(d: Date): string {
+  return d.toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
+
+/** 24-hour local clock time, e.g. "14:32" — prefixes each /daily log entry. */
+export function formatClockTime(d: Date): string {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Counts logged list items in a daily note's body (design.md §3's status bar). */
+export function countLoggedItems(body: string): number {
+  return body.split("\n").filter((l) => /^\s*-\s+\S/.test(l)).length;
 }
 
 export function todayISO(): string {

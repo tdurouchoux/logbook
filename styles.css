@@ -114,6 +114,25 @@
     flex-shrink: 0;
 }
 
+/* Search relevance cue (design.md §7): search never reorders the feed, so this
+   marks match quality in place instead — filled accent dot when every query term
+   is found in the short fields (title/projects/teams/type fields), faint dot when
+   at least one term only turned up in the body. */
+.logbook-match-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+.logbook-match-dot.is-strong {
+    background: var(--interactive-accent);
+}
+.logbook-match-dot.is-weak {
+    background: var(--text-faint);
+    opacity: 0.55;
+}
+
 .logbook-title {
     font-size: 15px;
     font-weight: 600;
@@ -484,12 +503,80 @@
     display: none;
 }
 
+/* ── Daily status bar (toast card, design.md §3) ────────────────────────── */
+
+.logbook-status-bar {
+    margin: 8px 16px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: var(--background-secondary);
+    border-left: 3px solid var(--state);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+}
+.logbook-status-bar:hover {
+    background: var(--background-secondary-alt);
+}
+.logbook-status-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    background: color-mix(in srgb, var(--state) 22%, var(--background-secondary));
+}
+.logbook-status-msg {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-normal);
+    line-height: 1.35;
+}
+.logbook-status-bar.is-red {
+    --state: var(--text-error);
+}
+.logbook-status-bar.is-orange {
+    --state: var(--color-orange);
+}
+.logbook-status-bar.is-green {
+    --state: var(--color-green);
+}
+
+/* Gamification nudge: a quick pop when a new item lands on today's note
+   (design.md §3), triggered from LogbookView's renderStatusBar(). */
+@keyframes logbook-status-pop {
+    0% {
+        transform: scale(1);
+    }
+    35% {
+        transform: scale(1.045);
+    }
+    60% {
+        transform: scale(0.985);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+.logbook-status-bar.is-pop {
+    animation: logbook-status-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+    .logbook-status-bar.is-pop {
+        animation: none;
+    }
+}
+
 /* ── Dock ────────────────────────────────────────────────────────────────── */
 
 .logbook-dock {
     position: relative; /* anchor for the dropdown */
     padding: 10px 16px 14px;
-    border-top: 1px solid var(--background-modifier-border);
     background: var(--background-primary);
 }
 
@@ -511,9 +598,9 @@
         box-shadow 0.15s;
 }
 .logbook-input:focus {
-    border-color: var(--interactive-accent);
+    border-color: var(--color-purple, var(--interactive-accent));
     box-shadow: 0 0 0 3px
-        color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+        color-mix(in srgb, var(--color-purple, var(--interactive-accent)) 16%, transparent);
 }
 .logbook-input::placeholder {
     color: var(--text-faint);
@@ -761,6 +848,16 @@
     margin-top: 2px;
 }
 
+.logbook-deadline-info {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 2px;
+}
+.logbook-deadline-info.is-overdue {
+    color: var(--text-error);
+    font-weight: 600;
+}
+
 /* ── Type-specific field rows (expanded only) ───────────────────────────── */
 
 .logbook-type-fields {
@@ -1002,6 +1099,7 @@
 .logbook-view.is-collapse-mode .logbook-pills-row,
 .logbook-view.is-collapse-mode .logbook-time,
 .logbook-view.is-collapse-mode .logbook-occurrence-info,
+.logbook-view.is-collapse-mode .logbook-deadline-info,
 .logbook-view.is-collapse-mode .logbook-chevron,
 .logbook-view.is-collapse-mode .logbook-pin-indicator {
     display: none;

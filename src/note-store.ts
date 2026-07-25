@@ -5,7 +5,7 @@ import {
   NoteType,
   RecurringFrontmatter,
 } from "./types";
-import { generateId, sanitizeFilename, todayISO } from "./utils";
+import { formatClockTime, formatDailyTitle, generateId, sanitizeFilename, todayISO } from "./utils";
 import { LogbookSettings } from "./settings";
 
 /**
@@ -135,9 +135,9 @@ export class NoteStore {
     } else if (type === "design") {
       lines.push("status: exploring");
     } else if (type === "meeting") {
-      lines.push("agenda: meetup", "attendees: []");
+      lines.push("agenda: meetup", "attendees: []", 'theme: ""');
     } else if (type === "recurring") {
-      lines.push("attendees: []");
+      lines.push("attendees: []", 'theme: ""');
     } else if (type === "knowledge") {
       lines.push("techStack: []");
     }
@@ -158,6 +158,46 @@ export class NoteStore {
     if (!(file instanceof TFile)) return "";
     const content = await this.app.vault.cachedRead(file);
     return stripFrontmatter(content);
+  }
+
+  /** Finds or creates today's daily note (design.md §5.8) — one per calendar day,
+   *  keyed by a deterministic `<folder>/<YYYY-MM-DD>.md` path rather than a
+   *  user-typed title. Deliberately omits `projects: []`/`teams: []` from the
+   *  written frontmatter, unlike every other type's createNote() path. */
+  async ensureDailyNote(): Promise<TFile> {
+    const folder = this.folder;
+    if (!this.app.vault.getAbstractFileByPath(folder)) {
+      await this.app.vault.createFolder(folder);
+    }
+
+    const iso = todayISO();
+    const path = normalizePath(`${folder}/${iso}.md`);
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof TFile) return existing;
+
+    const now = new Date().toISOString();
+    const title = formatDailyTitle(new Date());
+    const lines = [
+      "---",
+      `id: ${generateId()}`,
+      "type: daily",
+      `title: "${escapeYamlString(title)}"`,
+      `createdAt: ${now}`,
+      "---",
+      "",
+    ];
+    const templateBody = await this.getTemplateBody("daily");
+    await this.app.vault.create(path, lines.join("\n") + templateBody);
+    return this.app.vault.getAbstractFileByPath(path) as TFile;
+  }
+
+  /** design.md §7 /daily <text> — appends a plain, timestamped list item to
+   *  today's daily note's body. Uses the same atomic vault.process() primitive
+   *  as occurrence headings; no frontmatter to keep in sync, so no
+   *  updateFrontmatter call. */
+  async appendDailyItem(file: TFile, text: string): Promise<void> {
+    const time = formatClockTime(new Date());
+    await this.app.vault.process(file, (content) => appendDailyLine(content, text, time));
   }
 
   async createRecurringMeeting(title: string): Promise<TFile> {
@@ -259,6 +299,7 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
         ...base,
         type: "task",
         status: (raw.status as any) ?? "todo",
+        deadline: typeof raw.deadline === "string" ? raw.deadline : undefined,
       };
     case "meeting":
       return {
@@ -266,6 +307,7 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
         type: "meeting",
         agenda: (raw.agenda as any) ?? "meetup",
         attendees: Array.isArray(raw.attendees) ? raw.attendees.map(String) : [],
+        theme: typeof raw.theme === "string" ? raw.theme : "",
       };
     case "recurring":
       return {
@@ -273,9 +315,12 @@ function normalizeFrontmatter(raw: Record<string, unknown>, file: TFile): NoteFr
         type: "recurring",
         attendees: Array.isArray(raw.attendees) ? raw.attendees.map(String) : [],
         occurrences: Array.isArray(raw.occurrences) ? raw.occurrences.map(String) : [],
+        theme: typeof raw.theme === "string" ? raw.theme : "",
       };
     case "thoughts":
       return { ...base, type: "thoughts" };
+    case "daily":
+      return { ...base, type: "daily" };
     case "knowledge":
       return {
         ...base,
@@ -309,4 +354,16 @@ function insertOccurrenceHeading(content: string, isoDate: string): string {
   // Insert above all existing occurrence headings, i.e. right at the top of the body.
   const trimmedBody = body.replace(/^\s*/, "");
   return head + heading + trimmedBody;
+}
+
+/** Appends a plain, timestamped list item at the bottom of the body
+ *  (design.md §7 /daily), matching the app's newest-at-the-bottom convention. */
+function appendDailyLine(content: string, text: string, time: string): string {
+  const end = content.indexOf("\n---\n");
+  const fmEnd = content.startsWith("---") && end >= 0 ? end + 5 : 0;
+  const head = content.slice(0, fmEnd);
+  const body = content.slice(fmEnd);
+  const trimmed = body.replace(/\s+$/, "");
+  const line = `- ${time} · ${text.trim().replace(/\s*\n\s*/g, " ")}`;
+  return head + (trimmed ? `${trimmed}\n${line}\n` : `${line}\n`);
 }

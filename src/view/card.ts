@@ -10,12 +10,13 @@ import {
   isRecurring,
   isKnowledge,
   isDesign,
+  isDaily,
   convertType,
   MEETING_AGENDAS,
 } from "../types";
 import { NoteStore } from "../note-store";
-import { relativeTime } from "../utils";
-import { fuzzyMatchRanges } from "../filters";
+import { relativeTime, formatDeadline, isPastDeadline } from "../utils";
+import { fuzzyMatchRanges, substringMatchRanges, matchStrength } from "../filters";
 import { renderPicker } from "./pickers";
 
 export interface CardContext {
@@ -43,6 +44,11 @@ export function buildCard(note: LogNote, ctx: CardContext): HTMLElement {
 
 function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const isExpanded = ctx.isExpanded(note.file.path);
+  // Daily notes never convert to/from another type (card.ts's Change-type menu
+  // excludes them), so whether pickers are hidden is fixed for this card's
+  // whole lifetime — safe to decide once here rather than in
+  // refreshTypeDependentUI().
+  const initialTypeInfo = NOTE_TYPES[note.fm.type] ?? NOTE_TYPES.draft;
 
   const card = parent.createDiv("logbook-card");
   if (isExpanded) card.addClass("is-expanded");
@@ -72,47 +78,49 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const pillsRow = top.createDiv("logbook-pills-row");
   let filterLineEl: HTMLElement | null = null;
 
-  const projectLine = renderPillLine(pillsRow, "Projects");
-  const projectRow = projectLine.createDiv("logbook-project-row");
-  renderPicker(projectRow, {
-    values: note.fm.projects,
-    pool: ctx.pools.projects,
-    placeholder: "+ project",
-    chipClass: "logbook-pill logbook-project-chip",
-    icon: "briefcase",
-    onChange: (next) => {
-      note.fm.projects = next;
-      dirty.add("projects");
-    },
-  });
-  // Clicking an existing project chip's label (not its × or the input) filters by it.
-  projectRow.querySelectorAll(".logbook-project-chip .logbook-pill-label").forEach((el, i) => {
-    el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      ctx.onFilterProject(note.fm.projects[i]);
+  if (!initialTypeInfo.hidePickers) {
+    const projectLine = renderPillLine(pillsRow, "Projects");
+    const projectRow = projectLine.createDiv("logbook-project-row");
+    renderPicker(projectRow, {
+      values: note.fm.projects,
+      pool: ctx.pools.projects,
+      placeholder: "+ project",
+      chipClass: "logbook-pill logbook-project-chip",
+      icon: "briefcase",
+      onChange: (next) => {
+        note.fm.projects = next;
+        dirty.add("projects");
+      },
     });
-  });
+    // Clicking an existing project chip's label (not its × or the input) filters by it.
+    projectRow.querySelectorAll(".logbook-project-chip .logbook-pill-label").forEach((el, i) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        ctx.onFilterProject(note.fm.projects[i]);
+      });
+    });
 
-  const teamLine = renderPillLine(pillsRow, "Teams");
-  const teamRow = teamLine.createDiv("logbook-team-row");
-  renderPicker(teamRow, {
-    values: note.fm.teams,
-    pool: ctx.pools.teams,
-    placeholder: "+ team",
-    chipClass: "logbook-pill logbook-team-chip",
-    icon: "users",
-    onChange: (next) => {
-      note.fm.teams = next;
-      dirty.add("teams");
-    },
-  });
-  // Clicking an existing team chip's label (not its × or the input) filters by it.
-  teamRow.querySelectorAll(".logbook-team-chip .logbook-pill-label").forEach((el, i) => {
-    el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      ctx.onFilterTeam(note.fm.teams[i]);
+    const teamLine = renderPillLine(pillsRow, "Teams");
+    const teamRow = teamLine.createDiv("logbook-team-row");
+    renderPicker(teamRow, {
+      values: note.fm.teams,
+      pool: ctx.pools.teams,
+      placeholder: "+ team",
+      chipClass: "logbook-pill logbook-team-chip",
+      icon: "users",
+      onChange: (next) => {
+        note.fm.teams = next;
+        dirty.add("teams");
+      },
     });
-  });
+    // Clicking an existing team chip's label (not its × or the input) filters by it.
+    teamRow.querySelectorAll(".logbook-team-chip .logbook-pill-label").forEach((el, i) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        ctx.onFilterTeam(note.fm.teams[i]);
+      });
+    });
+  }
 
   // Pin glyph (design.md §4): same node in both states — a pure indicator while
   // collapsed (hidden entirely when not pinned, via CSS), a clickable toggle once
@@ -136,6 +144,17 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="6 9 12 15 18 9"/></svg>`;
+
+  if (ctx.searchQuery) {
+    const strength = matchStrength(note, ctx.searchQuery);
+    if (strength) {
+      const label = strength === "strong" ? "Matched in title/projects/teams" : "Matched in body only";
+      top.createEl("span", {
+        cls: `logbook-match-dot is-${strength}`,
+        attr: { "aria-label": label, title: label },
+      });
+    }
+  }
 
   top.createEl("span", { cls: "logbook-time", text: relativeTime(new Date(note.file.stat.mtime)) });
 
@@ -199,6 +218,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   }
 
   let occurrenceInfoEl: HTMLElement | null = null;
+  let deadlineInfoEl: HTMLElement | null = null;
 
   const previewWrap = header.createDiv("logbook-card-preview-wrap");
   let stackRowEl: HTMLElement | null = null;
@@ -206,7 +226,7 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
     const plain = note.body.replace(/^#{1,4}\s+/gm, "").replace(/[*_`>#]/g, "").slice(0, 160);
     const preview = previewWrap.createEl("div", { cls: "logbook-preview" });
     if (ctx.searchQuery) {
-      renderMatches(preview, plain, fuzzyMatchRanges(plain, ctx.searchQuery));
+      renderMatches(preview, plain, substringMatchRanges(plain, ctx.searchQuery));
     } else {
       preview.textContent = plain;
     }
@@ -242,27 +262,35 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
   const expandFooter = expandInner.createDiv("logbook-expand-footer");
   expandFooter.createEl("span", { cls: "logbook-kbd-hint", text: "⌘↵ save / esc collapse" });
 
-  // Change type (design.md §4, §15): opens a small menu of the other five types;
+  // Change type (design.md §4, §15): opens a small menu of the other types;
   // picking one stages a conversion via convertType() and re-renders the
   // type-dependent UI in place — nothing is written until the card closes.
-  const typeBtn = expandFooter.createEl("button", {
-    cls: "logbook-type-btn",
-    attr: { type: "button" },
-  });
-  typeBtn.createSpan({ text: "Change type" });
-  setIcon(typeBtn.createSpan({ cls: "logbook-type-btn-chevron" }), "chevron-down");
-  typeBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const menu = new Menu();
-    for (const t of Object.keys(NOTE_TYPES) as NoteType[]) {
-      if (t === note.fm.type) continue;
-      menu.addItem((item) => {
-        item.setTitle(NOTE_TYPES[t].label);
-        item.onClick(() => applyTypeChange(t));
-      });
-    }
-    menu.showAtMouseEvent(e);
-  });
+  // Daily notes are excluded entirely, both as a source and a target: their
+  // filename is date-keyed and they carry no projects/teams, neither of which
+  // convertType()'s generic common-field carryover was designed around.
+  if (!isDaily(note)) {
+    const typeBtn = expandFooter.createEl("button", {
+      cls: "logbook-type-btn",
+      attr: { type: "button" },
+    });
+    typeBtn.createSpan({ text: "Change type" });
+    setIcon(typeBtn.createSpan({ cls: "logbook-type-btn-chevron" }), "chevron-down");
+    typeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = new Menu();
+      for (const t of Object.keys(NOTE_TYPES) as NoteType[]) {
+        // Deprecated types (design) stay valid as a source — an existing
+        // design note can still convert away — but are never offered as a
+        // target, same as daily's structural exclusion above.
+        if (t === note.fm.type || t === "daily" || NOTE_TYPES[t].deprecated) continue;
+        menu.addItem((item) => {
+          item.setTitle(NOTE_TYPES[t].label);
+          item.onClick(() => applyTypeChange(t));
+        });
+      }
+      menu.showAtMouseEvent(e);
+    });
+  }
 
   // Save (design.md §4, §12): explicit equivalent of ⌘↵, since the global hotkey
   // has proven unreliable depending on where keyboard focus lands.
@@ -335,6 +363,19 @@ function renderCard(parent: HTMLElement, note: LogNote, ctx: CardContext) {
         text: `${n} occurrence${n === 1 ? "" : "s"}${latest ? ` · latest ${latest}` : ""}`,
       });
       header.insertBefore(occurrenceInfoEl, previewWrap);
+    }
+
+    if (deadlineInfoEl) {
+      deadlineInfoEl.remove();
+      deadlineInfoEl = null;
+    }
+    if (isTask(note) && note.fm.deadline) {
+      const overdue = note.fm.status !== "done" && isPastDeadline(note.fm.deadline);
+      deadlineInfoEl = header.createEl("div", {
+        cls: `logbook-deadline-info${overdue ? " is-overdue" : ""}`,
+        text: `Due ${formatDeadline(note.fm.deadline)}`,
+      });
+      header.insertBefore(deadlineInfoEl, previewWrap);
     }
 
     if (stackRowEl) {
@@ -469,7 +510,37 @@ function renderTypeFields(
   dirty: Set<string>,
   onFieldKeydown: (e: KeyboardEvent) => void
 ) {
+  if (isTask(note)) {
+    const row = container.createDiv("logbook-field-row");
+    row.createEl("label", { text: "Deadline" });
+    const input = row.createEl("input", {
+      cls: "logbook-field-input",
+      attr: { type: "date" },
+    });
+    input.value = note.fm.deadline ?? "";
+    input.addEventListener("input", () => {
+      note.fm.deadline = input.value || undefined;
+      dirty.add("deadline");
+    });
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("keydown", onFieldKeydown);
+  }
+
   if (isMeeting(note) || isRecurring(note)) {
+    const themeRow = container.createDiv("logbook-field-row");
+    themeRow.createEl("label", { text: "Theme" });
+    const themeInput = themeRow.createEl("input", {
+      cls: "logbook-field-input",
+      attr: { type: "text", spellcheck: "false", placeholder: "+ theme" },
+    });
+    themeInput.value = note.fm.theme ?? "";
+    themeInput.addEventListener("input", () => {
+      note.fm.theme = themeInput.value;
+      dirty.add("theme");
+    });
+    themeInput.addEventListener("click", (e) => e.stopPropagation());
+    themeInput.addEventListener("keydown", onFieldKeydown);
+
     const attendeesRow = container.createDiv("logbook-field-row");
     attendeesRow.createEl("label", { text: "Attendees" });
     const attendeesWrap = attendeesRow.createDiv();
